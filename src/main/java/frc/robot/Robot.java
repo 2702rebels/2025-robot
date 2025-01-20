@@ -11,14 +11,14 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 public class Robot extends TimedRobot {
-  private Command m_autonomousCommand;
+  private Command autonomousCommand;
 
-  private final RobotContainer m_robotContainer;
+  private final RobotContainer robotContainer;
 
   private final boolean kUseLimelight = false;
 
   public Robot() {
-    m_robotContainer = new RobotContainer();
+    robotContainer = new RobotContainer();
   }
 
   @Override
@@ -34,14 +34,14 @@ public class Robot extends TimedRobot {
      * of how to use vision should be tuned per-robot and to the team's specification.
      */
     if (kUseLimelight) {
-      var driveState = m_robotContainer.drivetrain.getState();
+      var driveState = robotContainer.drivetrain.getState();
       double headingDeg = driveState.Pose.getRotation().getDegrees();
       double omegaRps = Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
 
       LimelightHelpers.SetRobotOrientation("limelight", headingDeg, 0, 0, 0, 0, 0);
       var llMeasurement = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
       if (llMeasurement != null && llMeasurement.tagCount > 0 && omegaRps < 2.0) {
-        m_robotContainer.drivetrain.addVisionMeasurement(
+        robotContainer.drivetrain.addVisionMeasurement(
             llMeasurement.pose, Utils.fpgaToCurrentTime(llMeasurement.timestampSeconds));
       }
     }
@@ -58,10 +58,10 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousInit() {
-    m_autonomousCommand = m_robotContainer.getAutonomousCommand();
+    autonomousCommand = robotContainer.getAutonomousCommand();
 
-    if (m_autonomousCommand != null) {
-      m_autonomousCommand.schedule();
+    if (autonomousCommand != null) {
+      autonomousCommand.schedule();
     }
   }
 
@@ -73,8 +73,8 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopInit() {
-    if (m_autonomousCommand != null) {
-      m_autonomousCommand.cancel();
+    if (autonomousCommand != null) {
+      autonomousCommand.cancel();
     }
   }
 

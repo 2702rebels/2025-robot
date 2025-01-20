@@ -5,14 +5,14 @@ import choreo.auto.AutoRoutine;
 import choreo.auto.AutoTrajectory;
 
 public class AutoRoutines {
-  private final AutoFactory m_factory;
+  private final AutoFactory factory;
 
   public AutoRoutines(AutoFactory factory) {
-    m_factory = factory;
+    this.factory = factory;
   }
 
   public AutoRoutine simplePathAuto() {
-    final AutoRoutine routine = m_factory.newRoutine("SimplePath Auto");
+    final AutoRoutine routine = factory.newRoutine("SimplePath Auto");
     final AutoTrajectory simplePath = routine.trajectory("SimplePath");
 
     routine.active().onTrue(simplePath.resetOdometry().andThen(simplePath.cmd()));

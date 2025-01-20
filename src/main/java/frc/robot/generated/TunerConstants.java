@@ -230,6 +230,16 @@ public class TunerConstants {
               kBackRightSteerMotorInverted,
               kBackRightEncoderInverted);
 
+  /** Returns wheel radius. */
+  public static Distance wheelRadius() {
+    return kWheelRadius;
+  }
+
+  /** Returns turning radius. */
+  public static Distance turnRadius() {
+    return Meters.of(Math.hypot(kFrontLeftXPos.in(Meters), kFrontLeftYPos.in(Meters)));
+  }
+
   /**
    * Creates a CommandSwerveDrivetrain instance. This should only be called once in your robot
    * program,.

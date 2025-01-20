@@ -31,62 +31,64 @@ import java.util.function.Supplier;
  */
 public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Subsystem {
   private static final double kSimLoopPeriod = 0.005; // 5 ms
-  private Notifier m_simNotifier = null;
-  private double m_lastSimTime;
+  private Notifier simNotifier = null;
+  private double lastSimTime;
 
   /* Blue alliance sees forward as 0 degrees (toward red alliance wall) */
   private static final Rotation2d kBlueAlliancePerspectiveRotation = Rotation2d.kZero;
+
   /* Red alliance sees forward as 180 degrees (toward blue alliance wall) */
   private static final Rotation2d kRedAlliancePerspectiveRotation = Rotation2d.k180deg;
+
   /* Keep track if we've ever applied the operator perspective before or not */
-  private boolean m_hasAppliedOperatorPerspective = false;
+  private boolean hasAppliedOperatorPerspective = false;
 
   /** Swerve request to apply during field-centric path following */
-  private final SwerveRequest.ApplyFieldSpeeds m_pathApplyFieldSpeeds =
+  private final SwerveRequest.ApplyFieldSpeeds pathApplyFieldSpeeds =
       new SwerveRequest.ApplyFieldSpeeds();
 
-  private final PIDController m_pathXController = new PIDController(10, 0, 0);
-  private final PIDController m_pathYController = new PIDController(10, 0, 0);
-  private final PIDController m_pathThetaController = new PIDController(7, 0, 0);
+  private final PIDController pathXController = new PIDController(10, 0, 0);
+  private final PIDController pathYController = new PIDController(10, 0, 0);
+  private final PIDController pathThetaController = new PIDController(7, 0, 0);
 
   /* Swerve requests to apply during SysId characterization */
-  private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization =
+  private final SwerveRequest.SysIdSwerveTranslation translationCharacterization =
       new SwerveRequest.SysIdSwerveTranslation();
-  private final SwerveRequest.SysIdSwerveSteerGains m_steerCharacterization =
+  private final SwerveRequest.SysIdSwerveSteerGains steerCharacterization =
       new SwerveRequest.SysIdSwerveSteerGains();
-  private final SwerveRequest.SysIdSwerveRotation m_rotationCharacterization =
+  private final SwerveRequest.SysIdSwerveRotation rotationCharacterization =
       new SwerveRequest.SysIdSwerveRotation();
 
   /* SysId routine for characterizing translation. This is used to find PID gains for the drive motors. */
-  private final SysIdRoutine m_sysIdRoutineTranslation =
+  private final SysIdRoutine sysIdRoutineTranslation =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              null, // Use default ramp rate (1 V/s)
-              Volts.of(4), // Reduce dynamic step voltage to 4 V to prevent brownout
-              null, // Use default timeout (10 s)
+              null, // Use default ramp rate (1V/s)
+              Volts.of(4), // Reduce dynamic step voltage to 4V to prevent brownout
+              null, // Use default timeout (10s)
               // Log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdTranslation_State", state.toString())),
           new SysIdRoutine.Mechanism(
-              output -> setControl(m_translationCharacterization.withVolts(output)), null, this));
+              output -> setControl(translationCharacterization.withVolts(output)), null, this));
 
   /* SysId routine for characterizing steer. This is used to find PID gains for the steer motors. */
-  private final SysIdRoutine m_sysIdRoutineSteer =
+  private final SysIdRoutine sysIdRoutineSteer =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              null, // Use default ramp rate (1 V/s)
-              Volts.of(7), // Use dynamic voltage of 7 V
-              null, // Use default timeout (10 s)
+              null, // Use default ramp rate (1V/s)
+              Volts.of(7), // Use dynamic voltage of 7V
+              null, // Use default timeout (10s)
               // Log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdSteer_State", state.toString())),
           new SysIdRoutine.Mechanism(
-              volts -> setControl(m_steerCharacterization.withVolts(volts)), null, this));
+              volts -> setControl(steerCharacterization.withVolts(volts)), null, this));
 
   /*
    * SysId routine for characterizing rotation.
    * This is used to find PID gains for the FieldCentricFacingAngle HeadingController.
    * See the documentation of SwerveRequest.SysIdSwerveRotation for info on importing the log to SysId.
    */
-  private final SysIdRoutine m_sysIdRoutineRotation =
+  private final SysIdRoutine sysIdRoutineRotation =
       new SysIdRoutine(
           new SysIdRoutine.Config(
               /* This is in radians per second², but SysId only supports "volts per second" */
@@ -98,16 +100,16 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
               state -> SignalLogger.writeString("SysIdRotation_State", state.toString())),
           new SysIdRoutine.Mechanism(
               output -> {
-                /* output is actually radians per second, but SysId only supports "volts" */
-                setControl(m_rotationCharacterization.withRotationalRate(output.in(Volts)));
-                /* also log the requested output for SysId */
+                /* Output is actually radians per second, but SysId only supports "volts" */
+                setControl(rotationCharacterization.withRotationalRate(output.in(Volts)));
+                /* Also log the requested output for SysId */
                 SignalLogger.writeDouble("Rotational_Rate", output.in(Volts));
               },
               null,
               this));
 
   /* The SysId routine to test */
-  private SysIdRoutine m_sysIdRoutineToApply = m_sysIdRoutineTranslation;
+  private SysIdRoutine sysIdRoutineToApply = sysIdRoutineTranslation;
 
   /**
    * Constructs a CTRE SwerveDrivetrain using the specified constants.
@@ -191,12 +193,12 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   /**
    * Creates a new auto factory for this drivetrain with the given trajectory logger.
    *
-   * @param trajLogger Logger for the trajectory
+   * @param trajectoryLogger Logger for the trajectory
    * @return AutoFactory for this drivetrain
    */
-  public AutoFactory createAutoFactory(TrajectoryLogger<SwerveSample> trajLogger) {
+  public AutoFactory createAutoFactory(TrajectoryLogger<SwerveSample> trajectoryLogger) {
     return new AutoFactory(
-        () -> getState().Pose, this::resetPose, this::followPath, true, this, trajLogger);
+        () -> getState().Pose, this::resetPose, this::followPath, true, this, trajectoryLogger);
   }
 
   /**
@@ -215,18 +217,18 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    * @param sample Sample along the path to follow
    */
   public void followPath(SwerveSample sample) {
-    m_pathThetaController.enableContinuousInput(-Math.PI, Math.PI);
+    pathThetaController.enableContinuousInput(-Math.PI, Math.PI);
 
-    var pose = getState().Pose;
+    final var pose = getState().Pose;
+    final var targetSpeeds = sample.getChassisSpeeds();
 
-    var targetSpeeds = sample.getChassisSpeeds();
-    targetSpeeds.vxMetersPerSecond += m_pathXController.calculate(pose.getX(), sample.x);
-    targetSpeeds.vyMetersPerSecond += m_pathYController.calculate(pose.getY(), sample.y);
+    targetSpeeds.vxMetersPerSecond += pathXController.calculate(pose.getX(), sample.x);
+    targetSpeeds.vyMetersPerSecond += pathYController.calculate(pose.getY(), sample.y);
     targetSpeeds.omegaRadiansPerSecond +=
-        m_pathThetaController.calculate(pose.getRotation().getRadians(), sample.heading);
+        pathThetaController.calculate(pose.getRotation().getRadians(), sample.heading);
 
     setControl(
-        m_pathApplyFieldSpeeds
+        pathApplyFieldSpeeds
             .withSpeeds(targetSpeeds)
             .withWheelForceFeedforwardsX(sample.moduleForcesX())
             .withWheelForceFeedforwardsY(sample.moduleForcesY()));
@@ -234,36 +236,35 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
   /**
    * Runs the SysId Quasistatic test in the given direction for the routine specified by {@link
-   * #m_sysIdRoutineToApply}.
+   * #sysIdRoutineToApply}.
    *
    * @param direction Direction of the SysId Quasistatic test
    * @return Command to run
    */
   public Command sysIdQuasistatic(SysIdRoutine.Direction direction) {
-    return m_sysIdRoutineToApply.quasistatic(direction);
+    return sysIdRoutineToApply.quasistatic(direction);
   }
 
   /**
    * Runs the SysId Dynamic test in the given direction for the routine specified by {@link
-   * #m_sysIdRoutineToApply}.
+   * #sysIdRoutineToApply}.
    *
    * @param direction Direction of the SysId Dynamic test
    * @return Command to run
    */
   public Command sysIdDynamic(SysIdRoutine.Direction direction) {
-    return m_sysIdRoutineToApply.dynamic(direction);
+    return sysIdRoutineToApply.dynamic(direction);
   }
 
   @Override
   public void periodic() {
-    /*
-     * Periodically try to apply the operator perspective.
-     * If we haven't applied the operator perspective before, then we should apply it regardless of DS state.
-     * This allows us to correct the perspective in case the robot code restarts mid-match.
-     * Otherwise, only check and apply the operator perspective if the DS is disabled.
-     * This ensures driving behavior doesn't change until an explicit disable event occurs during testing.
-     */
-    if (!m_hasAppliedOperatorPerspective || DriverStation.isDisabled()) {
+    // periodically try to apply the operator perspective: if we haven't applied the operator
+    // perspective before, then we should apply it regardless of DS state.
+    // This allows us to correct the perspective in case the robot code restarts mid-match.
+    // Otherwise, only check and apply the operator perspective if the DS is disabled.
+    // This ensures driving behavior doesn't change until an explicit disable event occurs during
+    // testing.
+    if (!hasAppliedOperatorPerspective || DriverStation.isDisabled()) {
       DriverStation.getAlliance()
           .ifPresent(
               allianceColor -> {
@@ -271,26 +272,26 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                     allianceColor == Alliance.Red
                         ? kRedAlliancePerspectiveRotation
                         : kBlueAlliancePerspectiveRotation);
-                m_hasAppliedOperatorPerspective = true;
+                hasAppliedOperatorPerspective = true;
               });
     }
   }
 
   private void startSimThread() {
-    m_lastSimTime = Utils.getCurrentTimeSeconds();
+    lastSimTime = Utils.getCurrentTimeSeconds();
 
-    /* Run simulation at a faster rate so PID gains behave more reasonably */
-    m_simNotifier =
+    // run simulation at a faster rate so PID gains behave more reasonably
+    simNotifier =
         new Notifier(
             () -> {
               final double currentTime = Utils.getCurrentTimeSeconds();
-              double deltaTime = currentTime - m_lastSimTime;
-              m_lastSimTime = currentTime;
+              double deltaTime = currentTime - lastSimTime;
+              lastSimTime = currentTime;
 
-              /* use the measured time delta, get battery voltage from WPILib */
+              // use the measured time delta, get battery voltage from WPILib
               updateSimState(deltaTime, RobotController.getBatteryVoltage());
             });
 
-    m_simNotifier.startPeriodic(kSimLoopPeriod);
+    simNotifier.startPeriodic(kSimLoopPeriod);
   }
 }
