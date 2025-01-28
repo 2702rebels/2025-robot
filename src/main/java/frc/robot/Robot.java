@@ -23,7 +23,9 @@ public class Robot extends TimedRobot {
 
   @Override
   public void robotPeriodic() {
+    RobotState.getInstance().enterPeriodic();
     CommandScheduler.getInstance().run();
+    RobotState.getInstance().exitPeriodic();
 
     /*
      * This example of adding Limelight is very simple and may not be sufficient for on-field use.
@@ -58,6 +60,8 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousInit() {
+    RobotState.getInstance().enterAutonomous();
+
     autonomousCommand = robotContainer.getAutonomousCommand();
 
     if (autonomousCommand != null) {

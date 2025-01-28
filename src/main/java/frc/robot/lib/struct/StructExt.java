@@ -29,8 +29,8 @@ public interface StructExt {
    * @param arr Array to serialize
    */
   static void packArray(ByteBuffer bb, boolean[] arr) {
-    for (boolean obj : arr) {
-      bb.put(obj ? (byte) 1 : (byte) 0);
+    for (boolean value : arr) {
+      bb.put(value ? (byte) 1 : (byte) 0);
     }
   }
 }
