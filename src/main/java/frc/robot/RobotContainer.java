@@ -10,6 +10,8 @@ import choreo.auto.AutoChooser;
 import choreo.auto.AutoFactory;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import dev.doglog.DogLog;
+import dev.doglog.DogLogOptions;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -50,6 +52,16 @@ public class RobotContainer {
   private final AutoChooser autoChooser = new AutoChooser();
 
   public RobotContainer() {
+    // configure DogLog logging
+    DogLog.setOptions(new DogLogOptions().withCaptureDs(true).withLogExtras(true));
+
+    // log metadata
+    DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
+    DogLog.log("Metadata/BuildDate", BuildConstants.BUILD_DATE);
+    DogLog.log("Metadata/GitSHA", BuildConstants.GIT_SHA);
+    DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
+    DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
+
     autoFactory = drivetrain.createAutoFactory();
     autoRoutines = new AutoRoutines(autoFactory);
 

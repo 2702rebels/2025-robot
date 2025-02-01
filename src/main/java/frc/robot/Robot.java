@@ -14,11 +14,13 @@ public class Robot extends TimedRobot {
   private Command autonomousCommand;
 
   private final RobotContainer robotContainer;
+  private final Vision vision;
 
   private final boolean kUseLimelight = false;
 
   public Robot() {
     robotContainer = new RobotContainer();
+    vision = Vision.getInstance();
   }
 
   @Override
@@ -50,7 +52,9 @@ public class Robot extends TimedRobot {
   }
 
   @Override
-  public void disabledInit() {}
+  public void disabledInit() {
+    vision.disableLogging();
+  }
 
   @Override
   public void disabledPeriodic() {}
@@ -60,6 +64,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousInit() {
+    vision.enableLogging();
     RobotState.getInstance().enterAutonomous();
 
     autonomousCommand = robotContainer.getAutonomousCommand();
