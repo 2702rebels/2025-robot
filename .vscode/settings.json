@@ -71,9 +71,12 @@
   },
   "editor.formatOnPaste": true,
   "cSpell.words": [
+    "Choreo",
     "deadband",
+    "Feedforwards",
     "Odometry",
     "Quasistatic",
+    "setpoint",
     "teleop"
   ]
 }

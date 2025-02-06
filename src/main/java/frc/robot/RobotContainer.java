@@ -17,21 +17,21 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
+import frc.robot.Constants.DriveConstants;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 public class RobotContainer {
   // kSpeedAt12Volts desired top speed
-  private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
-
-  // 3/4 of a rotation per second max angular velocity
-  private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond);
+  private static final double maxSpeedMetersPerSecond = DriveConstants.maxSpeed.in(MetersPerSecond);
+  private static final double maxAngularRateRadiansPerSecond =
+      DriveConstants.maxAngularRate.in(RadiansPerSecond);
 
   // setting up bindings for necessary control of the swerve drive platform
   private final SwerveRequest.FieldCentric drive =
       new SwerveRequest.FieldCentric()
-          .withDeadband(MaxSpeed * 0.1)
-          .withRotationalDeadband(MaxAngularRate * 0.1) // add a 10% deadband
+          .withDeadband(maxSpeedMetersPerSecond * 0.1)
+          .withRotationalDeadband(maxAngularRateRadiansPerSecond * 0.1) // add a 10% deadband
           .withDriveRequestType(
               DriveRequestType.OpenLoopVoltage); // use open-loop control for drive motors
 
@@ -53,7 +53,7 @@ public class RobotContainer {
 
   public RobotContainer() {
     // configure DogLog logging
-    DogLog.setOptions(new DogLogOptions().withCaptureDs(true).withLogExtras(true));
+    DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
 
     // log metadata
     DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
@@ -80,11 +80,11 @@ public class RobotContainer {
             () ->
                 drive
                     // drive forward with negative Y (forward)
-                    .withVelocityX(-joystick.getLeftY() * MaxSpeed)
+                    .withVelocityX(-joystick.getLeftY() * maxSpeedMetersPerSecond)
                     // drive left with negative X (left)
-                    .withVelocityY(-joystick.getLeftX() * MaxSpeed)
+                    .withVelocityY(-joystick.getLeftX() * maxSpeedMetersPerSecond)
                     // drive counterclockwise with negative X (left)
-                    .withRotationalRate(-joystick.getRightX() * MaxAngularRate)));
+                    .withRotationalRate(-joystick.getRightX() * maxAngularRateRadiansPerSecond)));
 
     joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
     joystick

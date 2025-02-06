@@ -1,0 +1,282 @@
+package frc.robot.lib;
+
+import com.revrobotics.spark.ClosedLoopSlot;
+import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.config.SparkMaxConfig;
+import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.BooleanEntry;
+import edu.wpi.first.networktables.DoubleEntry;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StringEntry;
+import edu.wpi.first.util.function.BooleanConsumer;
+import edu.wpi.first.wpilibj.event.EventLoop;
+import frc.robot.Constants;
+import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleSupplier;
+import java.util.function.Supplier;
+
+/**
+ * Creates tunable parameters.
+ *
+ * <p>Borrowed from:
+ * https://github.com/Greater-Rochester-Robotics/Reefscape2025-340/blob/main/src/main/java/org/team340/lib/util/Tunable.java
+ */
+public final class Tunable {
+  private static final NetworkTable nt =
+      NetworkTableInstance.getDefault().getTable(Constants.TunablePrefix);
+  private static final EventLoop loop = new EventLoop();
+
+  /** Must be invoked in the robot periodic. */
+  public static void periodic() {
+    loop.poll();
+  }
+
+  /** Tunable double value. */
+  public static final class DoubleValue implements DoubleSupplier, AutoCloseable {
+    private final DoubleEntry entry;
+
+    private DoubleValue(String name, double defaultValue, Optional<DoubleConsumer> onChange) {
+      entry = nt.getDoubleTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public double get() {
+      return entry.get();
+    }
+
+    public void set(double value) {
+      entry.set(value);
+    }
+
+    @Override
+    public double getAsDouble() {
+      return get();
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Tunable boolean value. */
+  public static final class BooleanValue implements BooleanSupplier, AutoCloseable {
+    private final BooleanEntry entry;
+
+    private BooleanValue(String name, boolean defaultValue, Optional<BooleanConsumer> onChange) {
+      entry = nt.getBooleanTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public boolean get() {
+      return entry.get();
+    }
+
+    public void set(boolean value) {
+      entry.set(value);
+    }
+
+    @Override
+    public boolean getAsBoolean() {
+      return get();
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Tunable string value. */
+  public static final class StringValue implements Supplier<String>, AutoCloseable {
+    private final StringEntry entry;
+
+    private StringValue(String name, String defaultValue, Optional<Consumer<String>> onChange) {
+      entry = nt.getStringTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public String get() {
+      return entry.get();
+    }
+
+    public void set(String value) {
+      entry.set(value);
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Creates tunable double value with the specified default. */
+  public static DoubleValue value(String name, double defaultValue) {
+    return new DoubleValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable double value with the specified default and change handler. */
+  public static DoubleValue value(String name, double defaultValue, DoubleConsumer onChange) {
+    return new DoubleValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable boolean value with the specified default. */
+  public static BooleanValue value(String name, boolean defaultValue) {
+    return new BooleanValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable boolean value with the specified default and change handler. */
+  public static BooleanValue value(String name, boolean defaultValue, BooleanConsumer onChange) {
+    return new BooleanValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable string value with the specified default. */
+  public static StringValue value(String name, String defaultValue) {
+    return new StringValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable string value with the specified default and change handler. */
+  public static StringValue value(String name, String defaultValue, Consumer<String> onChange) {
+    return new StringValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Makes bound {@link PIDController} tunable. */
+  public static void bind(String name, PIDController value) {
+    value(name + "/kP", value.getP(), v -> value.setP(v));
+    value(name + "/kI", value.getI(), v -> value.setI(v));
+    value(name + "/kD", value.getD(), v -> value.setD(v));
+    value(name + "/IZone", value.getIZone(), v -> value.setIZone(v));
+    value(name + "/Tolerance", value.getErrorTolerance(), v -> value.setTolerance(v));
+  }
+
+  /** Makes bound {@link ProfiledPIDController} tunable. */
+  public static void bind(String name, ProfiledPIDController value) {
+    value(name + "/kP", value.getP(), v -> value.setP(v));
+    value(name + "/kI", value.getI(), v -> value.setI(v));
+    value(name + "/kD", value.getD(), v -> value.setD(v));
+    value(name + "/IZone", value.getIZone(), v -> value.setIZone(v));
+    value(name + "/Tolerance", value.getPositionTolerance(), v -> value.setTolerance(v));
+    value(
+        name + "/MaxV",
+        value.getConstraints().maxVelocity,
+        v ->
+            value.setConstraints(
+                new TrapezoidProfile.Constraints(v, value.getConstraints().maxAcceleration)));
+    value(
+        name + "/MaxA",
+        value.getConstraints().maxAcceleration,
+        v ->
+            value.setConstraints(
+                new TrapezoidProfile.Constraints(value.getConstraints().maxVelocity, v)));
+  }
+
+  /** Makes bound {@link SparkMax} controller at closed loop slot 0 tunable. */
+  public static void bind(String name, SparkMax spark) {
+    bind(name, spark, ClosedLoopSlot.kSlot0);
+  }
+
+  /** Makes bound {@link SparkMax} controller tunable. */
+  public static void bind(String name, SparkMax spark, ClosedLoopSlot slot) {
+    final var config = spark.configAccessor.closedLoop;
+    value(
+        name + "/kP",
+        config.getP(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.p(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/kI",
+        config.getI(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.i(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/kD",
+        config.getD(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.d(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/kV",
+        config.getFF(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.velocityFF(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/IZone",
+        config.getIZone(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.iZone(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/DFilter",
+        config.getDFilter(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.dFilter(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/MinOutput",
+        config.getMinOutput(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.minOutput(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/MaxOutput",
+        config.getMaxOutput(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.maxOutput(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+  }
+}

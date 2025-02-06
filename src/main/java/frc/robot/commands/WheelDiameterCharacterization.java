@@ -9,7 +9,7 @@ import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.generated.TunerConstants;
-import frc.robot.lib.TunableDouble;
+import frc.robot.lib.Tunable;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 /**
@@ -18,7 +18,8 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
  * <p>The idea and skeleton implementation is borrowed from the FRC6328 (Mechanical Advantage) team.
  */
 public class WheelDiameterCharacterization extends Command {
-  private static final TunableDouble omega = new TunableDouble("Drive/Wheel Diameter/Omega", 0.3);
+  private static final Tunable.DoubleValue omega =
+      Tunable.value("WheelDiameterCharacterization/Omega", 0.3);
 
   private static final double turnRadius = TunerConstants.turnRadius().in(Meters);
   private static final double wheelRadius = TunerConstants.wheelRadius().in(Meters);
