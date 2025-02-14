@@ -6,12 +6,18 @@ import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.BooleanArrayEntry;
 import edu.wpi.first.networktables.BooleanEntry;
+import edu.wpi.first.networktables.DoubleArrayEntry;
 import edu.wpi.first.networktables.DoubleEntry;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StringArrayEntry;
 import edu.wpi.first.networktables.StringEntry;
+import edu.wpi.first.networktables.StructArrayEntry;
+import edu.wpi.first.networktables.StructEntry;
 import edu.wpi.first.util.function.BooleanConsumer;
+import edu.wpi.first.util.struct.Struct;
 import edu.wpi.first.wpilibj.event.EventLoop;
 import frc.robot.Constants;
 import java.util.Optional;
@@ -75,6 +81,40 @@ public final class Tunable {
     }
   }
 
+  /** Tunable double array value. */
+  public static final class DoubleArrayValue implements Supplier<double[]>, AutoCloseable {
+    private final DoubleArrayEntry entry;
+
+    private DoubleArrayValue(
+        String name, double[] defaultValue, Optional<Consumer<double[]>> onChange) {
+      entry = nt.getDoubleArrayTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public double[] get() {
+      return entry.get();
+    }
+
+    public void set(double[] value) {
+      entry.set(value);
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
   /** Tunable boolean value. */
   public static final class BooleanValue implements BooleanSupplier, AutoCloseable {
     private final BooleanEntry entry;
@@ -105,6 +145,40 @@ public final class Tunable {
     @Override
     public boolean getAsBoolean() {
       return get();
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Tunable boolean array value. */
+  public static final class BooleanArrayValue implements Supplier<boolean[]>, AutoCloseable {
+    private final BooleanArrayEntry entry;
+
+    private BooleanArrayValue(
+        String name, boolean[] defaultValue, Optional<Consumer<boolean[]>> onChange) {
+      entry = nt.getBooleanArrayTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public boolean[] get() {
+      return entry.get();
+    }
+
+    public void set(boolean[] value) {
+      entry.set(value);
     }
 
     @Override
@@ -146,6 +220,108 @@ public final class Tunable {
     }
   }
 
+  /** Tunable string array value. */
+  public static final class StringArrayValue implements Supplier<String[]>, AutoCloseable {
+    private final StringArrayEntry entry;
+
+    private StringArrayValue(
+        String name, String[] defaultValue, Optional<Consumer<String[]>> onChange) {
+      entry = nt.getStringArrayTopic(name).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public String[] get() {
+      return entry.get();
+    }
+
+    public void set(String[] value) {
+      entry.set(value);
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Tunable struct value. */
+  public static final class StructValue<T> implements Supplier<T>, AutoCloseable {
+    private final StructEntry<T> entry;
+
+    private StructValue(
+        String name, Struct<T> struct, T defaultValue, Optional<Consumer<T>> onChange) {
+      entry = nt.getStructTopic(name, struct).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public T get() {
+      return entry.get();
+    }
+
+    public void set(T value) {
+      entry.set(value);
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
+  /** Tunable struct array value. */
+  public static final class StructArrayValue<T> implements Supplier<T[]>, AutoCloseable {
+    private final StructArrayEntry<T> entry;
+
+    private StructArrayValue(
+        String name, Struct<T> struct, T[] defaultValue, Optional<Consumer<T[]>> onChange) {
+      entry = nt.getStructArrayTopic(name, struct).getEntry(defaultValue);
+      entry.setDefault(defaultValue);
+
+      if (onChange.isPresent()) {
+        loop.bind(
+            () -> {
+              final var values = entry.readQueueValues();
+              if (values.length > 0) {
+                onChange.get().accept(values[values.length - 1]);
+              }
+            });
+      }
+    }
+
+    public T[] get() {
+      return entry.get();
+    }
+
+    public void set(T[] value) {
+      entry.set(value);
+    }
+
+    @Override
+    public void close() {
+      entry.close();
+    }
+  }
+
   /** Creates tunable double value with the specified default. */
   public static DoubleValue value(String name, double defaultValue) {
     return new DoubleValue(name, defaultValue, Optional.empty());
@@ -154,6 +330,17 @@ public final class Tunable {
   /** Creates tunable double value with the specified default and change handler. */
   public static DoubleValue value(String name, double defaultValue, DoubleConsumer onChange) {
     return new DoubleValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable double array value with the specified default. */
+  public static DoubleArrayValue value(String name, double[] defaultValue) {
+    return new DoubleArrayValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable double array value with the specified default and change handler. */
+  public static DoubleArrayValue value(
+      String name, double[] defaultValue, Consumer<double[]> onChange) {
+    return new DoubleArrayValue(name, defaultValue, Optional.of(onChange));
   }
 
   /** Creates tunable boolean value with the specified default. */
@@ -166,6 +353,17 @@ public final class Tunable {
     return new BooleanValue(name, defaultValue, Optional.of(onChange));
   }
 
+  /** Creates tunable boolean array value with the specified default. */
+  public static BooleanArrayValue value(String name, boolean[] defaultValue) {
+    return new BooleanArrayValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable boolean array value with the specified default and change handler. */
+  public static BooleanArrayValue value(
+      String name, boolean[] defaultValue, Consumer<boolean[]> onChange) {
+    return new BooleanArrayValue(name, defaultValue, Optional.of(onChange));
+  }
+
   /** Creates tunable string value with the specified default. */
   public static StringValue value(String name, String defaultValue) {
     return new StringValue(name, defaultValue, Optional.empty());
@@ -174,6 +372,39 @@ public final class Tunable {
   /** Creates tunable string value with the specified default and change handler. */
   public static StringValue value(String name, String defaultValue, Consumer<String> onChange) {
     return new StringValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable string array value with the specified default. */
+  public static StringArrayValue value(String name, String[] defaultValue) {
+    return new StringArrayValue(name, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable string array value with the specified default and change handler. */
+  public static StringArrayValue value(
+      String name, String[] defaultValue, Consumer<String[]> onChange) {
+    return new StringArrayValue(name, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable struct value with the specified default. */
+  public static <T> StructValue<T> value(String name, Struct<T> struct, T defaultValue) {
+    return new StructValue<T>(name, struct, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable struct value with the specified default and change handler. */
+  public static <T> StructValue<T> value(
+      String name, Struct<T> struct, T defaultValue, Consumer<T> onChange) {
+    return new StructValue<T>(name, struct, defaultValue, Optional.of(onChange));
+  }
+
+  /** Creates tunable struct array value with the specified default. */
+  public static <T> StructArrayValue<T> value(String name, Struct<T> struct, T[] defaultValue) {
+    return new StructArrayValue<T>(name, struct, defaultValue, Optional.empty());
+  }
+
+  /** Creates tunable struct array value with the specified default and change handler. */
+  public static <T> StructArrayValue<T> value(
+      String name, Struct<T> struct, T[] defaultValue, Consumer<T[]> onChange) {
+    return new StructArrayValue<T>(name, struct, defaultValue, Optional.of(onChange));
   }
 
   /** Makes bound {@link PIDController} tunable. */

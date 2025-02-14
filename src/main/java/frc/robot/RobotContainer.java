@@ -20,6 +20,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import frc.robot.subsystems.SuperStructure;
 
 public class RobotContainer {
   // kSpeedAt12Volts desired top speed
@@ -45,6 +46,7 @@ public class RobotContainer {
   private final CommandXboxController joystick = new CommandXboxController(0);
 
   public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+  private final SuperStructure superstructure = new SuperStructure();
 
   // path follower
   private final AutoFactory autoFactory;
