@@ -1,5 +1,7 @@
 package frc.robot;
 
+import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.PubSubOption;
@@ -10,6 +12,9 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.MatchType;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.ReefState;
 import java.util.BitSet;
 
@@ -37,7 +42,7 @@ public class RobotState {
    * into a consistent state. This approach avoids the problem of "missing updates"
    * that are possible if both sides were to modify the same data structure concurrently.
    */
-  private final NetworkTable reefStateTable = nt.getTable("RobotState/ReefState");
+  private final NetworkTable reefStateTable = nt.getTable("Robot/State/Reef");
   private final StringPublisher reefStateTypePublisher =
       reefStateTable.getStringTopic(".type").publish();
   private final StructPublisher<ReefState> reefStateRobotPublisher;
@@ -64,6 +69,25 @@ public class RobotState {
     reefStateRobotPublisher.setDefault(new ReefState());
   }
 
+  public static enum Intent {
+    NONE,
+
+    /** Intake coral form the floor */
+    CORAL_FLOOR_INTAKE,
+
+    /** Intake coral from the loading station */
+    CORAL_STATION_INTAKE,
+
+    /** Eject coral */
+    CORAL_EJECT,
+
+    /** Score coral at L2, L3, L4 per reef scoring strategy */
+    CORAL_SCORE,
+
+    /** Score coral at L1 */
+    CORAL_SCORE_L1,
+  }
+
   public static enum ScoringStrategy {
     /** Automatic based on the match type (qualification / playoff) */
     AUTO,
@@ -76,10 +100,48 @@ public class RobotState {
   }
 
   /** Scoring strategy for the reef */
+  @Logged(name = "ScoringStrategy", importance = Importance.INFO)
   public ScoringStrategy scoringStrategy = ScoringStrategy.AUTO;
+
+  /** Robot intent */
+  @Logged(name = "Intent", importance = Importance.INFO)
+  public Intent intent = Intent.NONE;
 
   /** Reef state (robot side) */
   public final ReefState reefState;
+
+  // spotless:off
+  @Logged(name = "Idle", importance = Importance.INFO)
+  public final Trigger idle = new Trigger(() -> intent == Intent.NONE);
+
+  @Logged(name = "ShouldIntakeCoralFloor", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoralFloor = new Trigger(() -> intent == Intent.CORAL_FLOOR_INTAKE);
+
+  @Logged(name = "ShouldIntakeCoralStation", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoralStation = new Trigger(() -> intent == Intent.CORAL_STATION_INTAKE);
+
+  @Logged(name = "ShouldEjectCoral", importance = Importance.INFO)
+  public final Trigger shouldEjectCoral = new Trigger(() -> intent == Intent.CORAL_EJECT);
+
+  @Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
+  public final Trigger shouldScoreCoral = new Trigger(() -> intent == Intent.CORAL_SCORE);
+
+  @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.CORAL_SCORE_L1);
+  // spotless:on
+
+  /** Gets the score level for automatic scoring (1..4) */
+  public int getScoreLevel() {
+    return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
+  }
+
+  public Command setIntent(Intent intent) {
+    return Commands.runOnce(
+            () -> {
+              this.intent = intent;
+            })
+        .withName("SetIntent");
+  }
 
   /** Synchronizes operator's input with the robot's perspective. */
   private void pollReefState() {

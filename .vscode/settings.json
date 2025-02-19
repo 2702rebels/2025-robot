@@ -57,7 +57,7 @@
     "edu.wpi.first.math.**.proto.*",
     "edu.wpi.first.math.**.struct.*"
   ],
-  "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx2G -Xms100m -Xlog:disable",
+  "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m -Xlog:disable",
   "java.format.enabled": false,
   "[java]": {
     "spotlessGradle.format.enable": true,
@@ -71,11 +71,16 @@
   },
   "editor.formatOnPaste": true,
   "cSpell.words": [
-    "Choreo",
+    "apriltag",
+    "brushless",
+    "choreo",
+    "datagram",
     "deadband",
-    "Feedforwards",
-    "Odometry",
-    "Quasistatic",
+    "feedforwards",
+    "intaking",
+    "odometry",
+    "quasistatic",
+    "roborio",
     "setpoint",
     "teleop"
   ]

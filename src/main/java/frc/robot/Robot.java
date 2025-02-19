@@ -5,23 +5,51 @@
 package frc.robot;
 
 import com.ctre.phoenix6.Utils;
+import edu.wpi.first.epilogue.Epilogue;
+import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.epilogue.Logged.Strategy;
+import edu.wpi.first.epilogue.logging.errors.ErrorHandler;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.lib.Tunable;
 
+@Logged(strategy = Strategy.OPT_IN)
 public class Robot extends TimedRobot {
   private Command autonomousCommand;
 
+  @Logged(name = "Container")
   private final RobotContainer robotContainer;
+
+  @Logged(name = "State")
+  private final RobotState robotState;
+
   private final Vision vision;
 
   private final boolean kUseLimelight = false;
 
   public Robot() {
-    robotContainer = new RobotContainer();
+    robotState = RobotState.getInstance();
     vision = Vision.getInstance();
+    robotContainer = new RobotContainer(robotState);
+
+    // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
+    Epilogue.configure(
+        config -> {
+          config.root = "Robot";
+
+          if (isSimulation()) {
+            // if running in simulation, then we'd want to re-throw any errors that
+            // occur so we can debug and fix them!
+            config.errorHandler = ErrorHandler.crashOnError();
+          }
+
+          // change to CRITICAL for more detailed logging (where supported)
+          config.minimumImportance = Logged.Importance.DEBUG;
+        });
+
+    Epilogue.bind(this);
   }
 
   @Override

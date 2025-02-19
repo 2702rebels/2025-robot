@@ -1,4 +1,4 @@
-package frc.robot.lib.struct;
+package frc.robot.lib;
 
 import java.nio.ByteBuffer;
 

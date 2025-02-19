@@ -36,6 +36,7 @@ import java.util.function.Supplier;
 public final class Tunable {
   private static final NetworkTable nt =
       NetworkTableInstance.getDefault().getTable(Constants.TunablePrefix);
+
   private static final EventLoop loop = new EventLoop();
 
   /** Must be invoked in the robot periodic. */
@@ -470,7 +471,7 @@ public final class Tunable {
           RevUtil.configEphemeral(spark, newConfig);
         });
     value(
-        name + "/kV",
+        name + "/kF",
         config.getFF(slot),
         v -> {
           final var newConfig = new SparkMaxConfig();

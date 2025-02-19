@@ -17,6 +17,41 @@ public final class Constants {
   /** Robot main loop cycle period in seconds */
   public static final double cyclePeriodSeconds = 0.02;
 
+  public static final class Network {
+    public static final int UDP_PORT_OBJECT_DETECTOR = 27021;
+    public static final int UDP_PORT_APRILTAG_DETECTOR = 27022;
+  }
+
+  /** RoboRIO CAN identifiers */
+  public static final class CanID {
+    public static final int MOTOR_ELEVATOR_LEADER = 10;
+    public static final int MOTOR_ELEVATOR_FOLLOWER = 11;
+    public static final int MOTOR_PIVOT_LEADER = 12;
+    public static final int MOTOR_PIVOT_FOLLOWER = 13;
+    public static final int MOTOR_MANIPULATOR_HORIZONTAL = 14;
+    public static final int MOTOR_MANIPULATOR_VERTICAL = 15;
+  }
+
+  public static final class RevConstants {
+    /**
+     * REV NEO550 motor constants
+     * https://docs.revrobotics.com/brushless/neo/550#motor-specifications
+     */
+    public static final class NEO550 {
+      public static final double kV = 917;
+      public static final double freeSpeed = 11000;
+    }
+
+    /**
+     * REV NEO v1 motor constants
+     * https://docs.revrobotics.com/brushless/neo/v1.1/neo-v1#motor-specifications
+     */
+    public static final class NEOv1 {
+      public static final double kV = 473;
+      public static final double freeSpeed = 5676;
+    }
+  }
+
   public static final class DriveConstants {
     /** Maximum linear speed */
     public static final LinearVelocity maxSpeed = TunerConstants.kSpeedAt12Volts;

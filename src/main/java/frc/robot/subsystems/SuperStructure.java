@@ -1,21 +1,38 @@
 package frc.robot.subsystems;
 
+import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.Pair;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
+import frc.robot.RobotState;
 import frc.robot.lib.Tunable;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Combines elevator and pivot (arm) since we want a coupled control of both during motion to the
- * desired position.
+ * Combines elevator and pivot since we want a coupled control of both during motion to the desired
+ * position.
  */
-public final class SuperStructure extends SubsystemBase {
-  private boolean isCoralPresent;
-  private boolean isAlgaePresent;
+public final class Superstructure extends SubsystemBase {
+  @Logged(name = "Position", importance = Importance.INFO)
+  private Position position = Position.STOWED;
 
-  private Position position;
+  private final Elevator elevator;
+  private final Pivot pivot;
+
+  public Superstructure(Elevator elevator, Pivot pivot) {
+    this.elevator = elevator;
+    this.pivot = pivot;
+
+    canFloorIntake = elevator.canFloorIntake.and(pivot.canFloorIntake);
+    canStationIntake = elevator.canStationIntake.and(pivot.canStationIntake);
+    canScoreL1 = elevator.canScoreL1.and(pivot.canScoreL1);
+    canScoreL2 = elevator.canScoreL2.and(pivot.canScoreL2);
+    canScoreL3 = elevator.canScoreL3.and(pivot.canScoreL3);
+    canScoreL4 = elevator.canScoreL4.and(pivot.canScoreL4);
+  }
 
   /** Mechanism positions */
   public enum Position {
@@ -28,28 +45,73 @@ public final class SuperStructure extends SubsystemBase {
     L4,
   }
 
-  /** Trigger for coral presence. */
-  public final Trigger hasCoral = new Trigger(() -> isCoralPresent);
+  /** Trigger for superstructure ready for floor intake */
+  @Logged(name = "CanFloorIntake", importance = Importance.INFO)
+  public final Trigger canFloorIntake;
 
-  /** Trigger for algae presence. */
-  public final Trigger hasAlgae = new Trigger(() -> isAlgaePresent);
+  /** Trigger for superstructure ready for station intake */
+  @Logged(name = "CanStationIntake", importance = Importance.INFO)
+  public final Trigger canStationIntake;
 
-  /** Sets the desired position. */
-  public void setPosition(Position position) {
-    this.position = position;
+  /** Trigger for superstructure ready for scoring at L1 */
+  @Logged(name = "CanScoreL1", importance = Importance.INFO)
+  public final Trigger canScoreL1;
+
+  /** Trigger for superstructure ready for scoring at L2 */
+  @Logged(name = "CanScoreL2", importance = Importance.INFO)
+  public final Trigger canScoreL2;
+
+  /** Trigger for superstructure ready for scoring at L3 */
+  @Logged(name = "CanScoreL3", importance = Importance.INFO)
+  public final Trigger canScoreL3;
+
+  /** Trigger for superstructure ready for scoring at L4 */
+  @Logged(name = "CanScoreL4", importance = Importance.INFO)
+  public final Trigger canScoreL4;
+
+  public Command setPosition(Position position) {
+    return runOnce(
+            () -> {
+              this.position = position;
+            })
+        .withName("SetPosition");
+  }
+
+  public Command setAutoScoringPosition() {
+    return run(() -> {
+          final var level = RobotState.getInstance().getScoreLevel();
+          switch (level) {
+            case 1:
+              this.position = Position.L1;
+              break;
+            case 2:
+              this.position = Position.L2;
+              break;
+            case 3:
+              this.position = Position.L3;
+              break;
+            case 4:
+              this.position = Position.L4;
+              break;
+          }
+        })
+        .withName("SetAutoScoringPosition");
   }
 
   @Override
   public void periodic() {
-    // TODO: use getSetpoint() to command elevator and arm position
+    final var setpoint = getSetpoint();
+
+    elevator.setPosition(setpoint.getFirst());
+    pivot.setAngle(setpoint.getSecond());
   }
 
   /** Returns current height of the elevator. */
   private double getElevatorHeight() {
-    return 0;
+    return elevator.getLeaderPosition();
   }
 
-  /** Returns the next setpoint for elevator and arm. */
+  /** Returns the next setpoint for elevator and pivot. */
   private Pair<Double, Double> getSetpoint() {
     final var height = getElevatorHeight();
     final var profile = positionProfiles.get(position);
@@ -59,7 +121,7 @@ public final class SuperStructure extends SubsystemBase {
     final var branchHeight = targetHeight - branchOffset.get();
 
     // if the mechanism is above the requested position, then we should first go to
-    // the requested profile branching point while maintaining arm at the transition angle,
+    // the requested profile branching point while maintaining pivot at the transition angle,
     // e.g. we are at L3 and need to go to L1
     //
     // use safety margin when testing to prevent falling into this case when we are
@@ -68,7 +130,7 @@ public final class SuperStructure extends SubsystemBase {
       return Pair.of(branchHeight, transitionAngle.get());
     }
 
-    // otherwise elevate the arm to the desired height, but do not rotate the arm
+    // otherwise elevate the pivot to the desired height, but do not rotate the pivot
     // until we are above the branching point
     return Pair.of(targetHeight, height >= branchHeight ? targetAngle : transitionAngle.get());
   }
@@ -93,7 +155,7 @@ public final class SuperStructure extends SubsystemBase {
 
   private static Tunable.DoubleValue profileValue(String name, double defaultValue) {
     return Tunable.value(
-        "Superstructure/" + name, defaultValue, SuperStructure::updatePositionProfiles);
+        "Superstructure/" + name, defaultValue, Superstructure::updatePositionProfiles);
   }
 
   // spotless:off
@@ -115,4 +177,8 @@ public final class SuperStructure extends SubsystemBase {
   private static Tunable.DoubleValue branchOffset = profileValue("BranchOffset", 0);
   private static Tunable.DoubleValue transitionAngle = profileValue("TransitionAngle", 0);
   // spotless:on
+
+  static {
+    updatePositionProfiles(0); // value is ignored
+  }
 }
