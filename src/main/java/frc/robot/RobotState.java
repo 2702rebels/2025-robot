@@ -81,11 +81,11 @@ public class RobotState {
     /** Eject coral */
     CORAL_EJECT,
 
-    /** Score coral at L2, L3, L4 per reef scoring strategy */
-    CORAL_SCORE,
-
     /** Score coral at L1 */
     CORAL_SCORE_L1,
+
+    /** Score coral at L2, L3, L4 per reef scoring strategy */
+    CORAL_SCORE_AUTO,
   }
 
   public static enum ScoringStrategy {
@@ -120,14 +120,20 @@ public class RobotState {
   @Logged(name = "ShouldIntakeCoralStation", importance = Importance.INFO)
   public final Trigger shouldIntakeCoralStation = new Trigger(() -> intent == Intent.CORAL_STATION_INTAKE);
 
+  @Logged(name = "ShouldIntakeCoral", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoral = shouldIntakeCoralFloor.or(shouldIntakeCoralStation);
+
   @Logged(name = "ShouldEjectCoral", importance = Importance.INFO)
   public final Trigger shouldEjectCoral = new Trigger(() -> intent == Intent.CORAL_EJECT);
 
-  @Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
-  public final Trigger shouldScoreCoral = new Trigger(() -> intent == Intent.CORAL_SCORE);
-
   @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
   public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.CORAL_SCORE_L1);
+
+  @Logged(name = "ShouldScoreCoralAuto", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralAuto = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO);
+
+@Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
+  public final Trigger shouldScoreCoral = shouldScoreCoralL1.or(shouldScoreCoralAuto);
   // spotless:on
 
   /** Gets the score level for automatic scoring (1..4) */

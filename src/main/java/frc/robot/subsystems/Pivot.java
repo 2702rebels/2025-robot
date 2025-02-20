@@ -4,6 +4,7 @@ import com.revrobotics.AbsoluteEncoder;
 import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkClosedLoopController;
+import com.revrobotics.spark.SparkLimitSwitch;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
@@ -66,6 +67,15 @@ public class Pivot extends SubsystemBase {
 
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Pivot", motorLeader, ClosedLoopSlot.kSlot0);
+  }
+
+  /**
+   * Gets the algae presence sensor.
+   *
+   * <p>Limit switch is connected to the data port on the SparkMax controller.
+   */
+  public SparkLimitSwitch getAlgaePresenceSensor() {
+    return motorLeader.getForwardLimitSwitch();
   }
 
   /** Trigger for pivot is stowed position. */

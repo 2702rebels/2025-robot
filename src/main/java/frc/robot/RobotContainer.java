@@ -77,7 +77,7 @@ public class RobotContainer {
           Constants.CanID.MOTOR_MANIPULATOR_VERTICAL, Constants.CanID.MOTOR_MANIPULATOR_HORIZONTAL);
 
   @Logged(name = "Superstructure", importance = Importance.INFO)
-  private final Superstructure superstructure = new Superstructure(elevator, pivot);
+  private final Superstructure superstructure = new Superstructure(elevator, pivot, manipulator);
 
   @Logged(name = "ObjectDetector", importance = Importance.INFO)
   private final ObjectDetector objectDetector = new ObjectDetector();
@@ -173,54 +173,88 @@ public class RobotContainer {
 
   /** Use this method to configure trigger bindings. */
   private void configureTriggers() {
-    // intent-driven
+    // intent-driven triggers
+
+    // eject coral
     state
         .shouldEjectCoral
-        .and(manipulator.hasCoral)
+        .and(superstructure.hasCoral)
         .and(pivot.canEject)
         .whileTrue(manipulator.ejectCoral());
 
+    // reset intent once coral has been ejected
+    state
+        .shouldEjectCoral
+        .and(superstructure.hasCoral.negate())
+        .onTrue(state.setIntent(Intent.NONE));
+
+    // intake coral from the floor
     state
         .shouldIntakeCoralFloor
-        .and(manipulator.hasCoral.negate())
-        .and(superstructure.canFloorIntake)
-        .whileTrue(manipulator.intakeCoral());
-
-    state
-        .shouldIntakeCoralStation
-        .and(manipulator.hasCoral.negate())
-        .and(superstructure.canStationIntake)
-        .whileTrue(manipulator.intakeCoral());
-
-    state
-        .shouldIntakeCoralFloor
-        .and(manipulator.hasCoral.negate())
+        .and(superstructure.hasCoral.negate())
         .onTrue(superstructure.setPosition(Position.FLOOR));
 
     state
+        .shouldIntakeCoralFloor
+        .and(superstructure.hasCoral.negate())
+        .and(superstructure.canFloorIntake)
+        .whileTrue(manipulator.intakeCoral());
+
+    // intake coral from the station
+    state
         .shouldIntakeCoralStation
-        .and(manipulator.hasCoral.negate())
+        .and(superstructure.hasCoral.negate())
         .onTrue(superstructure.setPosition(Position.STATION));
 
     state
-        .shouldIntakeCoralFloor
-        .or(state.shouldIntakeCoralStation)
-        .and(manipulator.hasCoral)
-        .onTrue(state.setIntent(Intent.NONE));
+        .shouldIntakeCoralStation
+        .and(superstructure.hasCoral.negate())
+        .and(superstructure.canStationIntake)
+        .whileTrue(manipulator.intakeCoral());
+
+    // reset intent once coral has been acquired
+    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.NONE));
+
+    // score coral at L1
+    state
+        .shouldScoreCoralL1
+        .and(superstructure.hasCoral)
+        .onTrue(superstructure.setPosition(Position.L1));
 
     state
-        .shouldScoreCoral
-        .and(manipulator.hasCoral)
+        .shouldScoreCoralL1
+        .and(superstructure.hasCoral)
+        .and(superstructure.canScoreL1)
+        .whileTrue(manipulator.ejectCoral());
+
+    // score coral via auto target
+    state
+        .shouldScoreCoralAuto
+        .and(superstructure.hasCoral)
         .onTrue(superstructure.setAutoScoringPosition());
 
     state
-        .shouldScoreCoral
-        .and(manipulator.hasCoral)
-        .and(superstructure.canScoreL2)
+        .shouldScoreCoralAuto
+        .and(superstructure.hasCoral)
+        .and(superstructure.targetsL4.negate())
+        .and(superstructure.canScoreAuto)
         .whileTrue(manipulator.ejectCoral());
 
-    // [default behavior] stow the game piece when no intent is specified
-    state.idle.and(manipulator.hasCoral).whileTrue(superstructure.setPosition(Position.STOWED));
+    state
+        .shouldScoreCoralAuto
+        .and(superstructure.hasCoral)
+        .and(superstructure.targetsL4)
+        .and(superstructure.canScoreL4)
+        .onTrue(superstructure.setPosition(Position.L4_SCORED));
+
+    // reset intent once coral has been scored
+    state
+        .shouldScoreCoral
+        .and(superstructure.hasCoral.negate())
+        .onTrue(state.setIntent(Intent.NONE));
+
+    // [default behavior] stow when no intent is specified
+    state.idle.whileTrue(superstructure.setPosition(Position.STOWED));
 
     // endgame alerts
     new Trigger(

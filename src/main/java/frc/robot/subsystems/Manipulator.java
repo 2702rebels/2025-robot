@@ -3,10 +3,8 @@ package frc.robot.subsystems;
 import com.revrobotics.spark.SparkLimitSwitch;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
-import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.RevConstants;
 import frc.robot.lib.RevVelocityController;
 import frc.robot.lib.Tunable;
@@ -27,18 +25,11 @@ public final class Manipulator extends SubsystemBase {
   private static final double kVerticalGearRatio = 7;
   private static final double kHorizontalGearRatio = 7;
 
-  // delay on the game piece presence trigger to allow it fully
-  // leave the mechanism before shutting down motors, etc.
-  private static final double kHasGamePieceDelaySeconds = 0.2;
-
   @Logged(name = "Vertical", importance = Importance.INFO)
   private final RevVelocityController vertical;
 
   @Logged(name = "Horizontal", importance = Importance.INFO)
   private final RevVelocityController horizontal;
-
-  private final SparkLimitSwitch coralSwitch;
-  private final SparkLimitSwitch algaeSwitch;
 
   public Manipulator(int verticalMotorCanID, int horizontalMotorCanID) {
     vertical =
@@ -59,14 +50,6 @@ public final class Manipulator extends SubsystemBase {
             0,
             0,
             1 / RevConstants.NEO550.kV);
-
-    coralSwitch = horizontal.getForwardLimitSwitch();
-    algaeSwitch = vertical.getForwardLimitSwitch();
-
-    // spotless:off
-    hasCoral = new Trigger(coralSwitch::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
-    hasAlgae = new Trigger(algaeSwitch::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
-    // spotless:on
   }
 
   private void stopMotors() {
@@ -74,13 +57,14 @@ public final class Manipulator extends SubsystemBase {
     vertical.stop();
   }
 
-  /** Trigger for coral presence. */
-  @Logged(name = "HasCoral", importance = Importance.INFO)
-  public final Trigger hasCoral;
-
-  /** Trigger for algae presence. */
-  @Logged(name = "HasAlgae", importance = Importance.INFO)
-  public final Trigger hasAlgae;
+  /**
+   * Gets the coral presence sensor.
+   *
+   * <p>Limit switch is connected to the data port on the SparkMax controller.
+   */
+  public SparkLimitSwitch getCoralPresenceSensor() {
+    return horizontal.getForwardLimitSwitch();
+  }
 
   public Command intakeCoral() {
     return runEnd(

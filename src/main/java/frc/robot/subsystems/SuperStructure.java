@@ -1,8 +1,10 @@
 package frc.robot.subsystems;
 
+import com.revrobotics.spark.SparkLimitSwitch;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.Pair;
+import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -19,12 +21,24 @@ public final class Superstructure extends SubsystemBase {
   @Logged(name = "Position", importance = Importance.INFO)
   private Position position = Position.STOWED;
 
+  // delay on the game piece presence trigger to allow it fully
+  // leave the mechanism before shutting down motors, etc.
+  private static final double kHasGamePieceDelaySeconds = 0.2;
+
+  private final RobotState state;
   private final Elevator elevator;
   private final Pivot pivot;
 
-  public Superstructure(Elevator elevator, Pivot pivot) {
+  private final SparkLimitSwitch coralSensor;
+  private final SparkLimitSwitch algaeSensor;
+
+  public Superstructure(Elevator elevator, Pivot pivot, Manipulator manipulator) {
+    this.state = RobotState.getInstance();
     this.elevator = elevator;
     this.pivot = pivot;
+
+    coralSensor = manipulator.getCoralPresenceSensor();
+    algaeSensor = pivot.getAlgaePresenceSensor();
 
     canFloorIntake = elevator.canFloorIntake.and(pivot.canFloorIntake);
     canStationIntake = elevator.canStationIntake.and(pivot.canStationIntake);
@@ -32,6 +46,28 @@ public final class Superstructure extends SubsystemBase {
     canScoreL2 = elevator.canScoreL2.and(pivot.canScoreL2);
     canScoreL3 = elevator.canScoreL3.and(pivot.canScoreL3);
     canScoreL4 = elevator.canScoreL4.and(pivot.canScoreL4);
+
+    canScoreAuto =
+        new Trigger(
+            () -> {
+              switch (state.getScoreLevel()) {
+                case 1:
+                  return canScoreL1.getAsBoolean();
+                case 2:
+                  return canScoreL2.getAsBoolean();
+                case 3:
+                  return canScoreL3.getAsBoolean();
+                case 4:
+                  return canScoreL4.getAsBoolean();
+                default:
+                  return false;
+              }
+            });
+
+    // spotless:off
+    hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
+    hasAlgae = new Trigger(algaeSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
+    // spotless:on
   }
 
   /** Mechanism positions */
@@ -43,7 +79,16 @@ public final class Superstructure extends SubsystemBase {
     L2,
     L3,
     L4,
+    L4_SCORED,
   }
+
+  /** Trigger for coral presence. */
+  @Logged(name = "HasCoral", importance = Importance.INFO)
+  public final Trigger hasCoral;
+
+  /** Trigger for algae presence. */
+  @Logged(name = "HasAlgae", importance = Importance.INFO)
+  public final Trigger hasAlgae;
 
   /** Trigger for superstructure ready for floor intake */
   @Logged(name = "CanFloorIntake", importance = Importance.INFO)
@@ -69,6 +114,14 @@ public final class Superstructure extends SubsystemBase {
   @Logged(name = "CanScoreL4", importance = Importance.INFO)
   public final Trigger canScoreL4;
 
+  /** Trigger for superstructure ready for scoring at auto scoring level. */
+  @Logged(name = "CanScoreAuto", importance = Importance.INFO)
+  public final Trigger canScoreAuto;
+
+  /** Trigger for superstructure directed to score at L4. */
+  @Logged(name = "TargetsL4", importance = Importance.INFO)
+  public final Trigger targetsL4 = new Trigger(() -> position == Position.L4);
+
   public Command setPosition(Position position) {
     return runOnce(
             () -> {
@@ -78,23 +131,23 @@ public final class Superstructure extends SubsystemBase {
   }
 
   public Command setAutoScoringPosition() {
-    return run(() -> {
-          final var level = RobotState.getInstance().getScoreLevel();
-          switch (level) {
-            case 1:
-              this.position = Position.L1;
-              break;
-            case 2:
-              this.position = Position.L2;
-              break;
-            case 3:
-              this.position = Position.L3;
-              break;
-            case 4:
-              this.position = Position.L4;
-              break;
-          }
-        })
+    return runOnce(
+            () -> {
+              switch (state.getScoreLevel()) {
+                case 1:
+                  this.position = Position.L1;
+                  break;
+                case 2:
+                  this.position = Position.L2;
+                  break;
+                case 3:
+                  this.position = Position.L3;
+                  break;
+                case 4:
+                  this.position = Position.L4;
+                  break;
+              }
+            })
         .withName("SetAutoScoringPosition");
   }
 
@@ -118,6 +171,13 @@ public final class Superstructure extends SubsystemBase {
 
     final var targetHeight = profile.getFirst();
     final var targetAngle = profile.getSecond();
+
+    // we should only transition to L4 scored from L4, so no additional
+    // logic is needed, just command new height (and angle)
+    if (position == Position.L4_SCORED) {
+      return Pair.of(targetHeight, targetAngle);
+    }
+
     final var branchHeight = targetHeight - branchOffset.get();
 
     // if the mechanism is above the requested position, then we should first go to
@@ -150,6 +210,7 @@ public final class Superstructure extends SubsystemBase {
     positionProfiles.put(Position.L2, Pair.of(l2Height.get(), l2Angle.get()));
     positionProfiles.put(Position.L3, Pair.of(l3Height.get(), l3Angle.get()));
     positionProfiles.put(Position.L4, Pair.of(l4Height.get(), l4Angle.get()));
+    positionProfiles.put(Position.L4_SCORED, Pair.of(l4SHeight.get(), l4SAngle.get()));
     // spotless:on
   }
 
@@ -173,6 +234,8 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue l3Height = profileValue("L3/Height", 0);
   private static Tunable.DoubleValue l4Angle = profileValue("L4/Angle", 0);
   private static Tunable.DoubleValue l4Height = profileValue("L4/Height", 0);
+  private static Tunable.DoubleValue l4SAngle = profileValue("L4Scored/Angle", 0);
+  private static Tunable.DoubleValue l4SHeight = profileValue("L4Scored/Height", 0);
   private static Tunable.DoubleValue branchMargin = profileValue("BranchMargin", 0);
   private static Tunable.DoubleValue branchOffset = profileValue("BranchOffset", 0);
   private static Tunable.DoubleValue transitionAngle = profileValue("TransitionAngle", 0);
