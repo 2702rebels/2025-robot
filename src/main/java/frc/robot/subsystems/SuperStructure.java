@@ -25,6 +25,14 @@ public final class Superstructure extends SubsystemBase {
   // leave the mechanism before shutting down motors, etc.
   private static final double kHasGamePieceDelaySeconds = 0.2;
 
+  // delay on the coral presence trigger (rising edge) to allow
+  // motors to run longer when game piece is partially in
+  private static final double kCoralIntakeDelaySeconds = 0.5;
+
+  // delay on the algae presence trigger (rising edge) to allow
+  // motors to run longer when game piece is partially in
+  private static final double kAlgaeIntakeDelaySeconds = 0.2;
+
   private final RobotState state;
   private final Elevator elevator;
   private final Pivot pivot;
@@ -65,8 +73,8 @@ public final class Superstructure extends SubsystemBase {
             });
 
     // spotless:off
-    hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
-    hasAlgae = new Trigger(algaeSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling);
+    hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling).debounce(kCoralIntakeDelaySeconds, DebounceType.kRising);
+    hasAlgae = new Trigger(algaeSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling).debounce(kAlgaeIntakeDelaySeconds, DebounceType.kRising);
     // spotless:on
   }
 

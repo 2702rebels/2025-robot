@@ -57,7 +57,7 @@ public class RobotContainer {
 
   private final RobotState state;
 
-  private final Telemetry logger = new Telemetry();
+  private final Telemetry logger = new Telemetry(Constants.Settings.LoggingEnabled);
 
   private final CommandXboxController controllerDriver = new CommandXboxController(0);
 
@@ -74,7 +74,7 @@ public class RobotContainer {
   @Logged(name = "Manipulator", importance = Importance.INFO)
   private final Manipulator manipulator =
       new Manipulator(
-          Constants.CanID.MOTOR_MANIPULATOR_VERTICAL, Constants.CanID.MOTOR_MANIPULATOR_HORIZONTAL);
+          Constants.CanID.MOTOR_MANIPULATOR_GUIDE, Constants.CanID.MOTOR_MANIPULATOR_CORAL);
 
   @Logged(name = "Superstructure", importance = Importance.INFO)
   private final Superstructure superstructure = new Superstructure(elevator, pivot, manipulator);
@@ -94,14 +94,18 @@ public class RobotContainer {
     state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
 
     // configure DogLog logging
-    DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
+    if (Constants.Settings.LoggingEnabled) {
+      DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
 
-    // log metadata
-    DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
-    DogLog.log("Metadata/BuildDate", BuildConstants.BUILD_DATE);
-    DogLog.log("Metadata/GitSHA", BuildConstants.GIT_SHA);
-    DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
-    DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
+      // log metadata
+      DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
+      DogLog.log("Metadata/BuildDate", BuildConstants.BUILD_DATE);
+      DogLog.log("Metadata/GitSHA", BuildConstants.GIT_SHA);
+      DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
+      DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
+    } else {
+      DogLog.setEnabled(false);
+    }
 
     autoFactory = drivetrain.createAutoFactory();
     autoRoutines = new AutoRoutines(autoFactory);
@@ -109,12 +113,40 @@ public class RobotContainer {
     autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
-    configureBindings();
-    configureTriggers();
+    if (Constants.Settings.TestingMode) {
+      configureTesting();
+    } else {
+      configureBindings();
+      configureTriggers();
+    }
+
+    configureDriveBindings();
+  }
+
+  /** Use this method to configure bindings and triggers for testing mode. */
+  private void configureTesting() {
+    controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
+    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_STATION_INTAKE));
+    controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
+
+    state
+        .shouldIntakeCoralStation
+        .and(superstructure.hasCoral.negate())
+        .whileTrue(manipulator.intakeCoral());
+
+    state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
+
+    state
+        .shouldEjectCoral
+        .and(superstructure.hasCoral.negate())
+        .onTrue(state.setIntent(Intent.NONE));
   }
 
   /** Use this method to configure controller bindings. */
-  private void configureBindings() {
+  private void configureBindings() {}
+
+  /** Use this method to configure controller bindings related to driving. */
+  private void configureDriveBindings() {
     // note that X is defined as forward according to WPILib convention,
     // and Y is defined as to the left according to WPILib convention.
     drivetrain.setDefaultCommand(
@@ -130,7 +162,12 @@ public class RobotContainer {
                     .withRotationalRate(
                         -controllerDriver.getRightX() * maxAngularRateRadiansPerSecond)));
 
+    // reset the field-centric heading on left bumper press
+    controllerDriver.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
+
+    // set brake position (X) when holding A
     controllerDriver.a().whileTrue(drivetrain.applyRequest(() -> brake));
+
     controllerDriver
         .b()
         .whileTrue(
@@ -138,12 +175,13 @@ public class RobotContainer {
                 () ->
                     point.withModuleDirection(
                         new Rotation2d(
-                            -controllerDriver.getLeftY(), -controllerDriver.getLeftX()))));
+                            -controllerDriver.getLeftX(), -controllerDriver.getLeftY()))));
 
     controllerDriver
         .pov(0)
         .whileTrue(
             drivetrain.applyRequest(() -> forwardStraight.withVelocityX(0.5).withVelocityY(0)));
+
     controllerDriver
         .pov(180)
         .whileTrue(
@@ -151,25 +189,24 @@ public class RobotContainer {
 
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
-    controllerDriver
-        .back()
-        .and(controllerDriver.y())
-        .whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
-    controllerDriver
-        .back()
-        .and(controllerDriver.x())
-        .whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
-    controllerDriver
-        .start()
-        .and(controllerDriver.y())
-        .whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
-    controllerDriver
-        .start()
-        .and(controllerDriver.x())
-        .whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
-
-    // reset the field-centric heading on left bumper press
-    controllerDriver.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
+    if (Constants.Settings.SysIdBindings) {
+      controllerDriver
+          .back()
+          .and(controllerDriver.y())
+          .whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
+      controllerDriver
+          .back()
+          .and(controllerDriver.x())
+          .whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
+      controllerDriver
+          .start()
+          .and(controllerDriver.y())
+          .whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
+      controllerDriver
+          .start()
+          .and(controllerDriver.x())
+          .whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
+    }
 
     drivetrain.registerTelemetry(logger::update);
   }

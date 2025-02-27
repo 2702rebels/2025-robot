@@ -11,6 +11,17 @@ import edu.wpi.first.units.measure.LinearVelocity;
 import frc.robot.generated.TunerConstants;
 
 public final class Constants {
+  public static final class Settings {
+    /** Logging */
+    public static final boolean LoggingEnabled = false;
+
+    /** SysId bindings */
+    public static final boolean SysIdBindings = false;
+
+    /** Testing mode */
+    public static final boolean TestingMode = true;
+  }
+
   /** NT prefix for tunable keys */
   public static final String TunablePrefix = "/Tunable";
 
@@ -28,8 +39,8 @@ public final class Constants {
     public static final int MOTOR_ELEVATOR_FOLLOWER = 11;
     public static final int MOTOR_PIVOT_LEADER = 12;
     public static final int MOTOR_PIVOT_FOLLOWER = 13;
-    public static final int MOTOR_MANIPULATOR_HORIZONTAL = 14;
-    public static final int MOTOR_MANIPULATOR_VERTICAL = 15;
+    public static final int MOTOR_MANIPULATOR_CORAL = 14;
+    public static final int MOTOR_MANIPULATOR_GUIDE = 15;
   }
 
   public static final class RevConstants {

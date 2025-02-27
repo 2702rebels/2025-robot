@@ -41,8 +41,10 @@ public class Telemetry {
   private final double[] moduleStatesArray = new double[8];
   private final double[] moduleTargetsArray = new double[8];
 
-  public Telemetry() {
-    SignalLogger.start();
+  public Telemetry(boolean loggingEnabled) {
+    if (loggingEnabled) {
+      SignalLogger.start();
+    }
   }
 
   /** Accepts the swerve drive state and log via SignalLogger and NT. */

@@ -44,4 +44,9 @@ public class LoggedSparkMax extends SparkMax {
   public double getCurrentAmps() {
     return getOutputCurrent();
   }
+
+  @Logged(name = "VelocityRPM", importance = Importance.INFO)
+  public double getVelocityRPM() {
+    return getEncoder().getVelocity();
+  }
 }

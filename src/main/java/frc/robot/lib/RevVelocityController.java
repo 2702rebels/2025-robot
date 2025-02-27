@@ -5,8 +5,6 @@ import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
-import edu.wpi.first.epilogue.Logged;
-import edu.wpi.first.epilogue.Logged.Importance;
 
 /**
  * Combines REV motor and SparkMax controller configured for a closed-loop velocity control mode.
@@ -20,11 +18,12 @@ public class RevVelocityController extends LoggedSparkMax {
     super(
         canID,
         (config) -> {
-          // general
-          config.idleMode(IdleMode.kCoast).smartCurrentLimit(60);
-
-          // signals
-          config.signals.primaryEncoderVelocityAlwaysOn(true);
+          config
+              .smartCurrentLimit(50)
+              .voltageCompensation(12)
+              .idleMode(IdleMode.kCoast)
+              .signals
+              .primaryEncoderVelocityAlwaysOn(true);
 
           // conversion factor based on the gear ratio
           config
@@ -57,10 +56,5 @@ public class RevVelocityController extends LoggedSparkMax {
 
   public void stop() {
     stopMotor();
-  }
-
-  @Logged(name = "VelocityRPM", importance = Importance.INFO)
-  public double getVelocityRPM() {
-    return encoder.getVelocity();
   }
 }
