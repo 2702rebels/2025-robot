@@ -1,4 +1,4 @@
 package frc.robot.lib;
 
-/** A value with attached timestamp in seconds. */
-public record TimestampedValue<T>(double timestamp, T value) {}
+/** A value with attached timestamp in microseconds. */
+public record TimestampedValue<T>(long timestamp, T value) {}

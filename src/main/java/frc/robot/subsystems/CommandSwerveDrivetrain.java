@@ -32,6 +32,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -239,7 +240,24 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    * @return The current field-centric chassis speeds.
    */
   public ChassisSpeeds getFieldSpeeds() {
-    return ChassisSpeeds.fromRobotRelativeSpeeds(getRobotSpeeds(), getState().Pose.getRotation());
+    return ChassisSpeeds.fromRobotRelativeSpeeds(getRobotSpeeds(), getPose().getRotation());
+  }
+
+  /**
+   * Returns observed robot's pose at the specified timestamp.
+   *
+   * @param timestamp FPGA timestamp in microseconds.
+   * @return The observed pose of the robot or Optional.empty().
+   */
+  public Optional<Pose2d> getPoseAt(long timestamp) {
+    // uses SwerveDrivetrain internal buffer, requires timestamp conversion as per:
+    //
+    // "Note that you must use a timestamp with an epoch since system startup (i.e.,
+    // the epoch of this timestamp is the same epoch as Utils.getCurrentTimeSeconds()).
+    // This means that you should use Utils.getCurrentTimeSeconds() as your time source
+    // in this case. An FPGA timestamp can be converted to the correct timebase using
+    // Utils.fpgaToCurrentTime(double)."
+    return samplePoseAt(Utils.fpgaToCurrentTime(timestamp / 1000000.0));
   }
 
   /**

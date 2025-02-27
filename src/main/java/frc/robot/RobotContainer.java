@@ -90,6 +90,9 @@ public class RobotContainer {
   public RobotContainer(RobotState state) {
     this.state = state;
 
+    // bind internal drivetrain buffer of historical poses
+    state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
+
     // configure DogLog logging
     DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
 

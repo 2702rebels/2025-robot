@@ -2,6 +2,8 @@ package frc.robot;
 
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.PubSubOption;
@@ -16,7 +18,10 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.ReefState;
+import frc.robot.lib.TimestampedCircularBuffer;
 import java.util.BitSet;
+import java.util.Optional;
+import java.util.function.Function;
 
 public class RobotState {
   private static RobotState instance;
@@ -29,7 +34,14 @@ public class RobotState {
   private static final int RP_CORALS_PER_LEVEL = 5;
   private static final int CORALS_PER_LEVEL = 12;
 
+  // timestamped log of recently measured (within last second) chassis speeds
+  private final TimestampedCircularBuffer<ChassisSpeeds> chassisSpeeds =
+      new TimestampedCircularBuffer<>(50);
+
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
+
+  // external supplier of observed historical robot poses
+  private Function<Long, Optional<Pose2d>> historicalPoseSupplier;
 
   /*
    * ReefState to use with Reef widgets
@@ -132,9 +144,14 @@ public class RobotState {
   @Logged(name = "ShouldScoreCoralAuto", importance = Importance.INFO)
   public final Trigger shouldScoreCoralAuto = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO);
 
-@Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
+  @Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
   public final Trigger shouldScoreCoral = shouldScoreCoralL1.or(shouldScoreCoralAuto);
   // spotless:on
+
+  /** Binds external historical pose supplier. */
+  public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
+    historicalPoseSupplier = value;
+  }
 
   /** Gets the score level for automatic scoring (1..4) */
   public int getScoreLevel() {
@@ -245,5 +262,20 @@ public class RobotState {
   /** Runs logic at the beginning of the autonomous cycle. */
   public void enterAutonomous() {
     reefState.reset();
+  }
+
+  /** Updates odometry based on direct and vision observations. */
+  public void updateOdometry(long timestamp, Pose2d pose, ChassisSpeeds fieldSpeeds) {
+    chassisSpeeds.enqueue(timestamp, fieldSpeeds);
+  }
+
+  /** Returns observed chassis speeds at the specified timestamp. */
+  public Optional<ChassisSpeeds> getSpeedsAt(long timestamp) {
+    return chassisSpeeds.findAt(timestamp);
+  }
+
+  /** Returns observed pose at the specified timestamp. */
+  public Optional<Pose2d> getPoseAt(long timestamp) {
+    return historicalPoseSupplier.apply(timestamp);
   }
 }

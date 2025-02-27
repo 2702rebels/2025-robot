@@ -4,13 +4,14 @@ import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Implements a fixed capacity timestamped queue. However no attempt is made to keep queue
  * timestamped ordered, the order is based purely on insertions.
  */
 public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T>> {
-  private final double[] timestamps;
+  private final long[] timestamps;
   private final List<T> values;
   private final int capacity;
   private int head = 0; // points to the next slot to be inserted/discarded
@@ -62,11 +63,11 @@ public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T
       values.add(null);
     }
 
-    timestamps = new double[capacity];
+    timestamps = new long[capacity];
   }
 
   /** Enqueues an element, automatically discards the oldest value if queue is at capacity. */
-  public void enqueue(double timestamp, T value) {
+  public void enqueue(long timestamp, T value) {
     timestamps[head] = timestamp;
     values.set(head, value);
 
@@ -88,7 +89,7 @@ public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T
   }
 
   /** Returns the newest (most recently) recorded timestamp. */
-  public double getHeadTimestamp() {
+  public long getHeadTimestamp() {
     if (full) {
       return timestamps[head == 0 ? capacity - 1 : head - 1];
     } else {
@@ -97,19 +98,19 @@ public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T
   }
 
   /** Returns the oldest recorded timestamp. */
-  public double getTailTimestamp() {
+  public long getTailTimestamp() {
     return full ? timestamps[head] : timestamps[0];
   }
 
   /** Returns value from the queue with the timestamp closest to the requested one. */
-  public T findAt(double timestamp) {
+  public Optional<T> findAt(long timestamp) {
     final var size = size();
     if (size == 0) {
-      return null;
+      return Optional.empty();
     }
 
     if (size == 1) {
-      return values.get(0);
+      return Optional.of(values.get(0));
     }
 
     // determine newest and oldest timestamps in the queue based on the insertion order
@@ -117,11 +118,11 @@ public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T
     final var oldestIndex = full ? head : 0;
 
     if (timestamp <= timestamps[oldestIndex]) {
-      return values.get(oldestIndex);
+      return Optional.of(values.get(oldestIndex));
     }
 
     if (timestamp >= timestamps[newestIndex]) {
-      return values.get(newestIndex);
+      return Optional.of(values.get(newestIndex));
     }
 
     // binary search, transform indices to [0, capacity) for ease of manipulation
@@ -137,28 +138,28 @@ public class TimestampedCircularBuffer<T> implements Iterable<TimestampedValue<T
 
       final var t = timestamps[kIndex];
       if (timestamp == t) {
-        return values.get(kIndex);
+        return Optional.of(values.get(kIndex));
       }
 
       if (timestamp < t) {
         if (k > 0 && timestamp > timestamps[(k - 1 + offset) % capacity]) {
-          return closest((k - 1 + offset) % capacity, kIndex, timestamp);
+          return Optional.of(closest((k - 1 + offset) % capacity, kIndex, timestamp));
         }
 
         j = k;
       } else {
         if (k < size - 1 && timestamp < timestamps[(k + 1 + offset) % capacity]) {
-          return closest(kIndex, (k + 1 + offset) % capacity, timestamp);
+          return Optional.of(closest(kIndex, (k + 1 + offset) % capacity, timestamp));
         }
 
         i = k + 1;
       }
     }
 
-    return values.get((k + offset) % capacity);
+    return Optional.of(values.get((k + offset) % capacity));
   }
 
-  private T closest(int i1, int i2, double timestamp) {
+  private T closest(int i1, int i2, long timestamp) {
     final var t1 = timestamps[i1];
     final var t2 = timestamps[i2];
     return Math.abs(timestamp - t1) < Math.abs(timestamp - t2) ? values.get(i1) : values.get(i2);

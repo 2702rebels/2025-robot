@@ -10,6 +10,7 @@ import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Strategy;
 import edu.wpi.first.epilogue.logging.errors.ErrorHandler;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
@@ -56,9 +57,15 @@ public class Robot extends TimedRobot {
   public void robotPeriodic() {
     Tunable.periodic();
 
-    RobotState.getInstance().enterPeriodic();
+    robotState.enterPeriodic();
     CommandScheduler.getInstance().run();
-    RobotState.getInstance().exitPeriodic();
+    robotState.exitPeriodic();
+
+    // update odometry tracker
+    robotState.updateOdometry(
+        RobotController.getFPGATime(),
+        robotContainer.drivetrain.getPose(),
+        robotContainer.drivetrain.getFieldSpeeds());
 
     /*
      * This example of adding Limelight is very simple and may not be sufficient for on-field use.
