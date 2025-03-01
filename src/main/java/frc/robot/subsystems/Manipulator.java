@@ -34,7 +34,7 @@ public final class Manipulator extends SubsystemBase {
   public Manipulator(int guideCanID, int coralCanID) {
     motorGuide =
         new LoggedSparkMax(
-            coralCanID,
+            guideCanID,
             (config) -> {
               config
                   .smartCurrentLimit(30)
