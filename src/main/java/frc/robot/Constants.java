@@ -20,6 +20,9 @@ public final class Constants {
 
     /** Testing mode */
     public static final boolean TestingMode = true;
+
+    /** Driving disabled */
+    public static final boolean DrivingDisabled = true;
   }
 
   /** NT prefix for tunable keys */

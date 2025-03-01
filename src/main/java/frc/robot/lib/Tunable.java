@@ -510,5 +510,21 @@ public final class Tunable {
           newConfig.closedLoop.maxOutput(v, slot);
           RevUtil.configEphemeral(spark, newConfig);
         });
+    value(
+        name + "/MaxVelocity",
+        config.maxMotion.getMaxVelocity(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.maxMotion.maxVelocity(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
+    value(
+        name + "/MaxAcceleration",
+        config.maxMotion.getMaxAcceleration(slot),
+        v -> {
+          final var newConfig = new SparkMaxConfig();
+          newConfig.closedLoop.maxMotion.maxAcceleration(v, slot);
+          RevUtil.configEphemeral(spark, newConfig);
+        });
   }
 }

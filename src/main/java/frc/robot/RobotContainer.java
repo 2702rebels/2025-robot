@@ -21,6 +21,7 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -120,26 +121,36 @@ public class RobotContainer {
       configureTriggers();
     }
 
-    configureDriveBindings();
+    if (!Constants.Settings.DrivingDisabled) {
+      configureDriveBindings();
+    }
   }
 
   /** Use this method to configure bindings and triggers for testing mode. */
   private void configureTesting() {
+    // reset the intent
     controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
-    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_STATION_INTAKE));
-    controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
 
-    state
-        .shouldIntakeCoralStation
-        .and(superstructure.hasCoral.negate())
-        .whileTrue(manipulator.intakeCoral());
+    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
+    controllerDriver.a().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+    controllerDriver.b().onTrue(new InstantCommand(elevator::reset));
 
-    state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
+    state.shouldScoreCoralL1.whileTrue(superstructure.setPosition(Position.L1));
+    state.shouldIntakeCoralFloor.whileTrue(superstructure.setPosition(Position.STOWED));
 
-    state
-        .shouldEjectCoral
-        .and(superstructure.hasCoral.negate())
-        .onTrue(state.setIntent(Intent.NONE));
+    // controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
+
+    // state
+    //     .shouldIntakeCoralStation
+    //     .and(superstructure.hasCoral.negate())
+    //     .whileTrue(manipulator.intakeCoral());
+
+    // state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
+
+    // state
+    //     .shouldEjectCoral
+    //     .and(superstructure.hasCoral.negate())
+    //     .onTrue(state.setIntent(Intent.NONE));
   }
 
   /** Use this method to configure controller bindings. */

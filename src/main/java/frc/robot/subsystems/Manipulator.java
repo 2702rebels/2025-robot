@@ -15,8 +15,8 @@ import frc.robot.lib.Tunable;
  */
 public final class Manipulator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double CORAL_INTAKE_VELOCITY = 0.65; // ~1000 RPM
-  private static final double CORAL_INTAKE_VELOCITY_GUIDE = 0.75; // ~1000 RPM
+  private static final double CORAL_INTAKE_VELOCITY = 0.75;
+  private static final double CORAL_INTAKE_VELOCITY_GUIDE = 0.75;
   private static final double CORAL_EJECT_VELOCITY = 0.5;
 
   private static final double ALGAE_INTAKE_VELOCITY = 0.5;
@@ -55,7 +55,7 @@ public final class Manipulator extends SubsystemBase {
             coralCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(50)
+                  .smartCurrentLimit(30)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals
@@ -107,7 +107,7 @@ public final class Manipulator extends SubsystemBase {
     return runEnd(
             () -> {
               motorCoral.stopMotor();
-              motorGuide.set(-algaeIntakeVelocity.get());
+              motorGuide.set(algaeIntakeVelocity.get());
             },
             this::stopMotors)
         .withName("IntakeAlgae");

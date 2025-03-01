@@ -10,6 +10,7 @@ import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.LoggedSparkMax;
@@ -18,6 +19,9 @@ import frc.robot.lib.Tunable;
 public class Pivot extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
   private static final double kP = 1;
+
+  // positional tolerance
+  private static final double positionalTolerance = 0.5;
 
   @Logged(name = "Leader", importance = Importance.INFO)
   private final LoggedSparkMax motorLeader;
@@ -80,38 +84,18 @@ public class Pivot extends SubsystemBase {
 
   /** Trigger for pivot is stowed position. */
   @Logged(name = "IsStowed", importance = Importance.INFO)
-  public final Trigger isStowed = new Trigger(() -> getAngle() > 0); // TODO: value
+  public final Trigger isStowed = new Trigger(() -> isAtAngle(0)); // TODO: value
 
   /** Trigger for pivot position safe for ejection. */
   @Logged(name = "CanEject", importance = Importance.INFO)
-  public final Trigger canEject = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for floor intake */
-  @Logged(name = "CanFloorIntake", importance = Importance.INFO)
-  public final Trigger canFloorIntake = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for station intake */
-  @Logged(name = "CanStationIntake", importance = Importance.INFO)
-  public final Trigger canStationIntake = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for scoring at L1 */
-  @Logged(name = "CanScoreL1", importance = Importance.INFO)
-  public final Trigger canScoreL1 = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for scoring at L2 */
-  @Logged(name = "CanScoreL2", importance = Importance.INFO)
-  public final Trigger canScoreL2 = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for scoring at L3 */
-  @Logged(name = "CanScoreL3", importance = Importance.INFO)
-  public final Trigger canScoreL3 = new Trigger(() -> getAngle() > 0); // TODO: value
-
-  /** Trigger for pivot position ready for scoring at L4 */
-  @Logged(name = "CanScoreL4", importance = Importance.INFO)
-  public final Trigger canScoreL4 = new Trigger(() -> getAngle() > 0); // TODO: value
+  public final Trigger canEject = new Trigger(() -> isAtAngle(0)); // TODO: value
 
   public void setAngle(double value) {
     controller.setReference(value, ControlType.kPosition, ClosedLoopSlot.kSlot0);
+  }
+
+  public boolean isAtAngle(double value) {
+    return MathUtil.isNear(value, getAngle(), positionalTolerance);
   }
 
   @Logged(name = "Angle", importance = Importance.INFO)

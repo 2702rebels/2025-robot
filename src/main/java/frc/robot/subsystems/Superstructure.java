@@ -18,20 +18,37 @@ import java.util.Map;
  * position.
  */
 public final class Superstructure extends SubsystemBase {
+  // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
+  private static final double kStowedHeight = 0;
+  private static final double kFloorHeight = 0;
+  private static final double kStationHeight = 0;
+  private static final double kL1Height = 16;
+  private static final double kL2Height = 32;
+  private static final double kL3Height = 48;
+  private static final double kL4Height = 64;
+
+  private static final double kStowedAngle = 0;
+  private static final double kFloorAngle = 0;
+  private static final double kStationAngle = 0;
+  private static final double kL1Angle = 0;
+  private static final double kL2Angle = 0;
+  private static final double kL3Angle = 0;
+  private static final double kL4Angle = 0;
+
   @Logged(name = "Position", importance = Importance.INFO)
   private Position position = Position.STOWED;
 
   // delay on the game piece presence trigger to allow it fully
   // leave the mechanism before shutting down motors, etc.
-  private static final double kHasGamePieceDelaySeconds = 0.2;
+  private static final double kHasGamePieceDelaySeconds = 0.4;
 
   // delay on the coral presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kCoralIntakeDelaySeconds = 0.5;
+  private static final double kCoralIntakeDelaySeconds = 0.4;
 
   // delay on the algae presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kAlgaeIntakeDelaySeconds = 0.2;
+  private static final double kAlgaeIntakeDelaySeconds = 0.4;
 
   private final RobotState state;
   private final Elevator elevator;
@@ -48,12 +65,14 @@ public final class Superstructure extends SubsystemBase {
     coralSensor = manipulator.getCoralPresenceSensor();
     algaeSensor = pivot.getAlgaePresenceSensor();
 
-    canFloorIntake = elevator.canFloorIntake.and(pivot.canFloorIntake);
-    canStationIntake = elevator.canStationIntake.and(pivot.canStationIntake);
-    canScoreL1 = elevator.canScoreL1.and(pivot.canScoreL1);
-    canScoreL2 = elevator.canScoreL2.and(pivot.canScoreL2);
-    canScoreL3 = elevator.canScoreL3.and(pivot.canScoreL3);
-    canScoreL4 = elevator.canScoreL4.and(pivot.canScoreL4);
+    // spotless:off
+    canFloorIntake = new Trigger(() -> elevator.isAtPosition(kFloorHeight) && pivot.isAtAngle(kFloorAngle));
+    canStationIntake = new Trigger(() -> elevator.isAtPosition(kStationHeight) && pivot.isAtAngle(kStationAngle));
+    canScoreL1 = new Trigger(() -> elevator.isAtPosition(kL1Height) && pivot.isAtAngle(kL1Angle));
+    canScoreL2 = new Trigger(() -> elevator.isAtPosition(kL2Height) && pivot.isAtAngle(kL2Angle));
+    canScoreL3 = new Trigger(() -> elevator.isAtPosition(kL3Height) && pivot.isAtAngle(kL3Angle));
+    canScoreL4 = new Trigger(() -> elevator.isAtPosition(kL4Height) && pivot.isAtAngle(kL4Angle));
+    // spotless:on
 
     canScoreAuto =
         new Trigger(
@@ -228,20 +247,20 @@ public final class Superstructure extends SubsystemBase {
   }
 
   // spotless:off
-  private static Tunable.DoubleValue stowedAngle = profileValue("Stowed/Angle", 0);
-  private static Tunable.DoubleValue stowedHeight = profileValue("Stowed/Height", 0);
-  private static Tunable.DoubleValue floorAngle = profileValue("Floor/Angle", 0);
-  private static Tunable.DoubleValue floorHeight = profileValue("Floor/Height", 0);
-  private static Tunable.DoubleValue stationAngle = profileValue("Station/Angle", 0);
-  private static Tunable.DoubleValue stationHeight = profileValue("Station/Height", 0);
-  private static Tunable.DoubleValue l1Angle = profileValue("L1/Angle", 0);
-  private static Tunable.DoubleValue l1Height = profileValue("L1/Height", 0);
-  private static Tunable.DoubleValue l2Angle = profileValue("L2/Angle", 0);
-  private static Tunable.DoubleValue l2Height = profileValue("L2/Height", 0);
-  private static Tunable.DoubleValue l3Angle = profileValue("L3/Angle", 0);
-  private static Tunable.DoubleValue l3Height = profileValue("L3/Height", 0);
-  private static Tunable.DoubleValue l4Angle = profileValue("L4/Angle", 0);
-  private static Tunable.DoubleValue l4Height = profileValue("L4/Height", 0);
+  private static Tunable.DoubleValue stowedAngle = profileValue("Stowed/Angle", kStowedAngle);
+  private static Tunable.DoubleValue stowedHeight = profileValue("Stowed/Height", kStowedHeight);
+  private static Tunable.DoubleValue floorAngle = profileValue("Floor/Angle", kFloorAngle);
+  private static Tunable.DoubleValue floorHeight = profileValue("Floor/Height", kFloorHeight);
+  private static Tunable.DoubleValue stationAngle = profileValue("Station/Angle", kStationAngle);
+  private static Tunable.DoubleValue stationHeight = profileValue("Station/Height", kStationHeight);
+  private static Tunable.DoubleValue l1Angle = profileValue("L1/Angle", kL1Angle);
+  private static Tunable.DoubleValue l1Height = profileValue("L1/Height", kL1Height);
+  private static Tunable.DoubleValue l2Angle = profileValue("L2/Angle", kL2Angle);
+  private static Tunable.DoubleValue l2Height = profileValue("L2/Height", kL2Height);
+  private static Tunable.DoubleValue l3Angle = profileValue("L3/Angle", kL3Angle);
+  private static Tunable.DoubleValue l3Height = profileValue("L3/Height", kL3Height);
+  private static Tunable.DoubleValue l4Angle = profileValue("L4/Angle", kL4Angle);
+  private static Tunable.DoubleValue l4Height = profileValue("L4/Height", kL4Height);
   private static Tunable.DoubleValue l4SAngle = profileValue("L4Scored/Angle", 0);
   private static Tunable.DoubleValue l4SHeight = profileValue("L4Scored/Height", 0);
   private static Tunable.DoubleValue branchMargin = profileValue("BranchMargin", 0);

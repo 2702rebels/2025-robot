@@ -5,18 +5,31 @@ import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
+import com.revrobotics.spark.config.EncoderConfig;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.LoggedSparkMax;
+import frc.robot.lib.RevUtil;
 import frc.robot.lib.Tunable;
 
 public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 1;
+  private static final double kP = 0.1;
+  private static final double kD = 0;
+  private static final double kMaxVelocity = 64; // inch/sec
+  private static final double kMaxAcceleration = 256; // inch/sec.sq
+  private static final double kRampRate = 0.25;
+
+  // conversion factor between rotation and linear movement
+  // 3" wheel diameter, 8:1 reduction ratio
+  private static final double conversionFactor = Math.PI * 3 / 8;
+
+  // positional tolerance
+  private static final double positionalTolerance = 0.5;
 
   @Logged(name = "Leader", importance = Importance.INFO)
   private final LoggedSparkMax motorLeader;
@@ -31,11 +44,17 @@ public class Elevator extends SubsystemBase {
   public Elevator(int leaderCanID, int followerCanID) {
     final var commonConfig =
         new SparkMaxConfig()
-            .smartCurrentLimit(60)
+            .smartCurrentLimit(20)
             .voltageCompensation(12)
             .idleMode(IdleMode.kBrake)
+            .closedLoopRampRate(rampRate.get())
             .signals
             .primaryEncoderPositionAlwaysOn(true);
+
+    final var encoderConfig =
+        new EncoderConfig()
+            .positionConversionFactor(conversionFactor)
+            .velocityConversionFactor(conversionFactor / 60);
 
     motorLeader =
         new LoggedSparkMax(
@@ -46,7 +65,14 @@ public class Elevator extends SubsystemBase {
                   .closedLoop
                   .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                   .velocityFF(0)
-                  .p(kP);
+                  .p(kP)
+                  .d(kD)
+                  .maxMotion
+                  .maxVelocity(kMaxVelocity)
+                  .maxAcceleration(kMaxAcceleration)
+                  .allowedClosedLoopError(positionalTolerance);
+
+              config.encoder.apply(encoderConfig);
             });
 
     motorFollower =
@@ -55,6 +81,7 @@ public class Elevator extends SubsystemBase {
             (config) -> {
               // follow leader's output (non-inverted)
               config.apply(commonConfig).follow(motorLeader);
+              config.encoder.apply(encoderConfig);
             });
 
     encoderLeader = motorLeader.getEncoder();
@@ -63,38 +90,29 @@ public class Elevator extends SubsystemBase {
 
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Elevator", motorLeader, ClosedLoopSlot.kSlot0);
+
+    reset();
   }
 
-  /** Trigger for elevator position ready for floor intake */
-  @Logged(name = "CanFloorIntake", importance = Importance.INFO)
-  public final Trigger canFloorIntake = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
-
-  /** Trigger for elevator position ready for station intake */
-  @Logged(name = "CanStationIntake", importance = Importance.INFO)
-  public final Trigger canStationIntake = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
-
-  /** Trigger for elevator position ready for scoring at L1 */
-  @Logged(name = "CanScoreL1", importance = Importance.INFO)
-  public final Trigger canScoreL1 = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
-
-  /** Trigger for elevator position ready for scoring at L2 */
-  @Logged(name = "CanScoreL2", importance = Importance.INFO)
-  public final Trigger canScoreL2 = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
-
-  /** Trigger for elevator position ready for scoring at L3 */
-  @Logged(name = "CanScoreL3", importance = Importance.INFO)
-  public final Trigger canScoreL3 = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
-
-  /** Trigger for elevator position ready for scoring at L4 */
-  @Logged(name = "CanScoreL4", importance = Importance.INFO)
-  public final Trigger canScoreL4 = new Trigger(() -> getLeaderPosition() > 0); // TODO: value
+  private void updateRampRate(double value) {
+    final var newConfig = new SparkMaxConfig();
+    newConfig.closedLoopRampRate(value);
+    RevUtil.configEphemeral(motorLeader, newConfig);
+    RevUtil.configEphemeral(motorFollower, newConfig);
+  }
 
   public void reset() {
     encoderLeader.setPosition(0);
   }
 
   public void setPosition(double value) {
+    // use ControlType.kMAXMotionPositionControl for MAX Motion
+    // however, it does not seem to work well at all
     controller.setReference(value, ControlType.kPosition, ClosedLoopSlot.kSlot0);
+  }
+
+  public boolean isAtPosition(double value) {
+    return MathUtil.isNear(value, getPosition(), positionalTolerance);
   }
 
   @Logged(name = "Position", importance = Importance.INFO)
@@ -126,4 +144,8 @@ public class Elevator extends SubsystemBase {
   public double getFollowerVelocity() {
     return encoderFollower.getVelocity();
   }
+
+  // spotless:off
+  private Tunable.DoubleValue rampRate = Tunable.value("Elevator/RampRate", kRampRate, this::updateRampRate);
+  // spotless:on
 }
