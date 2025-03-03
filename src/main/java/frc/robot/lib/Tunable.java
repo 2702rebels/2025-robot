@@ -3,6 +3,8 @@ package frc.robot.lib;
 import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.SparkMaxConfig;
+import edu.wpi.first.math.controller.ArmFeedforward;
+import edu.wpi.first.math.controller.ElevatorFeedforward;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
@@ -526,5 +528,21 @@ public final class Tunable {
           newConfig.closedLoop.maxMotion.maxAcceleration(v, slot);
           RevUtil.configEphemeral(spark, newConfig);
         });
+  }
+
+  /** Makes bound {@link ArmFeedforward} tunable. */
+  public static void bind(String name, ArmFeedforward value) {
+    value(name + "/kS", value.getKs(), v -> value.setKs(v));
+    value(name + "/kG", value.getKg(), v -> value.setKg(v));
+    value(name + "/kV", value.getKv(), v -> value.setKv(v));
+    value(name + "/kA", value.getKa(), v -> value.setKa(v));
+  }
+
+  /** Makes bound {@link ElevatorFeedforward} tunable. */
+  public static void bind(String name, ElevatorFeedforward value) {
+    value(name + "/kS", value.getKs(), v -> value.setKs(v));
+    value(name + "/kG", value.getKg(), v -> value.setKg(v));
+    value(name + "/kV", value.getKv(), v -> value.setKv(v));
+    value(name + "/kA", value.getKa(), v -> value.setKa(v));
   }
 }

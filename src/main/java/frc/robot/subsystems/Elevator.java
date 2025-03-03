@@ -12,25 +12,34 @@ import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.ElevatorFeedforward;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.Constants;
 import frc.robot.lib.LoggedSparkMax;
-import frc.robot.lib.RevUtil;
 import frc.robot.lib.Tunable;
 
 public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 0.5;
+  private static final double kP = 0.01;
   private static final double kD = 0;
+
+  private static final double kS = 0;
+  private static final double kG = 0;
+  private static final double kV = 0;
+  private static final double kA = 0;
   private static final double kMaxVelocity = 64; // inch/sec
   private static final double kMaxAcceleration = 256; // inch/sec.sq
-  private static final double kRampRate = 0.25;
 
   // conversion factor between rotation and linear movement
   // 3" wheel diameter, 8:1 reduction ratio
   private static final double conversionFactor = Math.PI * 3 / 8;
 
   // positional tolerance
-  private static final double positionalTolerance = 0.5;
+  private static final double tolerance = 0.5;
+
+  @Logged(name = "Setpoint", importance = Importance.INFO)
+  private double setpoint;
 
   @Logged(name = "Leader", importance = Importance.INFO)
   private final LoggedSparkMax motorLeader;
@@ -42,13 +51,18 @@ public class Elevator extends SubsystemBase {
   private final RelativeEncoder encoderFollower;
   private final SparkClosedLoopController controller;
 
+  private final ElevatorFeedforward ffController;
+  private TrapezoidProfile trapezoidProfile;
+
+  private TrapezoidProfile.State state = new TrapezoidProfile.State(0, 0);
+  private TrapezoidProfile.State goal = new TrapezoidProfile.State(0, 0);
+
   public Elevator(int leaderCanID, int followerCanID) {
     final var commonConfig =
         new SparkMaxConfig()
             .smartCurrentLimit(30)
             .voltageCompensation(12)
-            .idleMode(IdleMode.kBrake)
-            .closedLoopRampRate(rampRate.get());
+            .idleMode(IdleMode.kBrake);
 
     final var signalsConfig = new SignalsConfig().primaryEncoderPositionAlwaysOn(true);
 
@@ -70,7 +84,7 @@ public class Elevator extends SubsystemBase {
                   .maxMotion
                   .maxVelocity(kMaxVelocity)
                   .maxAcceleration(kMaxAcceleration)
-                  .allowedClosedLoopError(positionalTolerance);
+                  .allowedClosedLoopError(tolerance);
 
               config.apply(commonConfig);
               config.encoder.apply(encoderConfig);
@@ -94,14 +108,38 @@ public class Elevator extends SubsystemBase {
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Elevator", motorLeader, ClosedLoopSlot.kSlot0);
 
+    ffController = new ElevatorFeedforward(kS, kG, kV, kA);
+    trapezoidProfile =
+        new TrapezoidProfile(
+            new TrapezoidProfile.Constraints(maxVelocity.get(), maxAcceleration.get()));
+
+    // make FF configuration tunable
+    Tunable.bind("Elevator/FF", ffController);
+
     reset();
   }
 
-  private void updateRampRate(double value) {
-    final var newConfig = new SparkMaxConfig();
-    newConfig.closedLoopRampRate(value);
-    RevUtil.configEphemeral(motorLeader, newConfig);
-    RevUtil.configEphemeral(motorFollower, newConfig);
+  private void updateMaxVelocity(double value) {
+    trapezoidProfile =
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(value, maxAcceleration.get()));
+  }
+
+  private void updateMaxAcceleration(double value) {
+    trapezoidProfile =
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(maxVelocity.get(), value));
+  }
+
+  @Override
+  public void periodic() {
+    goal.position = setpoint;
+    state.position = getPosition();
+    state.velocity = getVelocity();
+
+    // this calculate method is doing at least two new allocations... :(
+    state = trapezoidProfile.calculate(Constants.cyclePeriodSeconds, state, goal);
+    final var ff = ffController.calculate(state.position, state.velocity);
+
+    controller.setReference(state.position, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
   }
 
   public void reset() {
@@ -115,7 +153,7 @@ public class Elevator extends SubsystemBase {
   }
 
   public boolean isAtPosition(double value) {
-    return isAtPosition(value, positionalTolerance);
+    return isAtPosition(value, tolerance);
   }
 
   public boolean isAtPosition(double value, double tolerance) {
@@ -130,6 +168,16 @@ public class Elevator extends SubsystemBase {
   @Logged(name = "Velocity", importance = Importance.INFO)
   public double getVelocity() {
     return getLeaderVelocity();
+  }
+
+  @Logged(name = "State/Position", importance = Importance.DEBUG)
+  public double statePosition() {
+    return state.position;
+  }
+
+  @Logged(name = "State/Velocity", importance = Importance.DEBUG)
+  public double stateVelocity() {
+    return state.velocity;
   }
 
   @Logged(name = "Leader/Position", importance = Importance.INFO)
@@ -153,6 +201,7 @@ public class Elevator extends SubsystemBase {
   }
 
   // spotless:off
-  private Tunable.DoubleValue rampRate = Tunable.value("Elevator/RampRate", kRampRate, this::updateRampRate);
+  private Tunable.DoubleValue maxVelocity = Tunable.value("Elevator/FF/MaxVelocity", kMaxVelocity, this::updateMaxVelocity);
+  private Tunable.DoubleValue maxAcceleration = Tunable.value("Elevator/FF/MaxAcceleration", kMaxAcceleration, this::updateMaxAcceleration);
   // spotless:on
 }

@@ -76,6 +76,7 @@
     "choreo",
     "datagram",
     "deadband",
+    "Feedforward",
     "feedforwards",
     "intaking",
     "odometry",
