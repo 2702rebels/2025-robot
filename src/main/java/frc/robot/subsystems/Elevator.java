@@ -35,7 +35,10 @@ public class Elevator extends SubsystemBase {
   // 3" wheel diameter, 8:1 reduction ratio
   private static final double conversionFactor = Math.PI * 3 / 8;
 
-  // positional tolerance
+  // maximum safe travel
+  private static final double maxTravel = 70;
+
+  // tolerance
   private static final double tolerance = 0.5;
 
   @Logged(name = "Setpoint", importance = Importance.INFO)
@@ -137,7 +140,7 @@ public class Elevator extends SubsystemBase {
 
     // this calculate method is doing at least two new allocations... :(
     state = trapezoidProfile.calculate(Constants.cyclePeriodSeconds, state, goal);
-    final var ff = ffController.calculate(state.position, state.velocity);
+    final var ff = ffController.calculateWithVelocities(getVelocity(), state.velocity);
 
     controller.setReference(state.position, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
   }
@@ -147,9 +150,7 @@ public class Elevator extends SubsystemBase {
   }
 
   public void setPosition(double value) {
-    // use ControlType.kMAXMotionPositionControl for MAX Motion
-    // however, it does not seem to work well at all
-    controller.setReference(value, ControlType.kPosition, ClosedLoopSlot.kSlot0);
+    setpoint = MathUtil.clamp(value, 0, maxTravel);
   }
 
   public boolean isAtPosition(double value) {

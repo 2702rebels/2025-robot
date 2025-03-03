@@ -130,8 +130,16 @@ public class RobotContainer {
     // reset the intent
     controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
 
-    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-    controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
+    // controllerDriver.povUp().onTrue(new InstantCommand(() -> pivot.setAngle(90), pivot));
+    // controllerDriver.povDown().onTrue(new InstantCommand(() -> pivot.setAngle(10), pivot));
+
+    // controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(24),
+    // elevator));
+    // controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0),
+    // elevator));
+
+    // controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+    // controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
 
     // controllerDriver.a().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
     // controllerDriver.b().onTrue(new InstantCommand(elevator::reset));
