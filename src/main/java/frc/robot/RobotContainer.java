@@ -21,7 +21,6 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -131,26 +130,53 @@ public class RobotContainer {
     // reset the intent
     controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
 
-    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
-    controllerDriver.a().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-    controllerDriver.b().onTrue(new InstantCommand(elevator::reset));
+    controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+    controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
 
-    state.shouldScoreCoralL1.whileTrue(superstructure.setPosition(Position.L1));
-    state.shouldIntakeCoralFloor.whileTrue(superstructure.setPosition(Position.STOWED));
+    // controllerDriver.a().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+    // controllerDriver.b().onTrue(new InstantCommand(elevator::reset));
+
+    // state.shouldScoreCoralL1.whileTrue(superstructure.setPosition(Position.L1));
+    // state.shouldIntakeCoralFloor.whileTrue(superstructure.setPosition(Position.STOWED));
 
     // controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
 
-    // state
-    //     .shouldIntakeCoralStation
-    //     .and(superstructure.hasCoral.negate())
-    //     .whileTrue(manipulator.intakeCoral());
+    // intake coral from the floor
+    state
+        .shouldIntakeCoralFloor
+        .and(superstructure.hasCoral.negate())
+        .onTrue(superstructure.setPosition(Position.FLOOR));
 
-    // state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
+    state
+        .shouldIntakeCoralFloor
+        .and(superstructure.hasCoral.negate())
+        .and(superstructure.canFloorIntake)
+        .whileTrue(manipulator.intakeCoral());
+
+    // reset intent once coral has been acquired
+    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.NONE));
+
+    state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
+
+    state
+        .shouldEjectCoral
+        .and(superstructure.hasCoral.negate())
+        .onTrue(state.setIntent(Intent.NONE));
+
+    // score coral at L1
+    state
+        .shouldScoreCoralL1
+        .and(superstructure.hasCoral)
+        .onTrue(superstructure.setPosition(Position.L1));
 
     // state
-    //     .shouldEjectCoral
-    //     .and(superstructure.hasCoral.negate())
-    //     .onTrue(state.setIntent(Intent.NONE));
+    //     .shouldScoreCoralL1
+    //     .and(superstructure.hasCoral)
+    //     .and(superstructure.canScoreL1)
+    //     .whileTrue(manipulator.ejectCoral());
+
+    // [default behavior] stow when no intent is specified
+    state.idle.whileTrue(superstructure.setPosition(Position.STOWED));
   }
 
   /** Use this method to configure controller bindings. */
@@ -230,7 +256,7 @@ public class RobotContainer {
     state
         .shouldEjectCoral
         .and(superstructure.hasCoral)
-        .and(pivot.canEject)
+        .and(superstructure.canEject)
         .whileTrue(manipulator.ejectCoral());
 
     // reset intent once coral has been ejected

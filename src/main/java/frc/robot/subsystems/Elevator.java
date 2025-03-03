@@ -6,6 +6,7 @@ import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.EncoderConfig;
+import com.revrobotics.spark.config.SignalsConfig;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
@@ -18,7 +19,7 @@ import frc.robot.lib.Tunable;
 
 public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 0.1;
+  private static final double kP = 0.5;
   private static final double kD = 0;
   private static final double kMaxVelocity = 64; // inch/sec
   private static final double kMaxAcceleration = 256; // inch/sec.sq
@@ -44,12 +45,12 @@ public class Elevator extends SubsystemBase {
   public Elevator(int leaderCanID, int followerCanID) {
     final var commonConfig =
         new SparkMaxConfig()
-            .smartCurrentLimit(20)
+            .smartCurrentLimit(30)
             .voltageCompensation(12)
             .idleMode(IdleMode.kBrake)
-            .closedLoopRampRate(rampRate.get())
-            .signals
-            .primaryEncoderPositionAlwaysOn(true);
+            .closedLoopRampRate(rampRate.get());
+
+    final var signalsConfig = new SignalsConfig().primaryEncoderPositionAlwaysOn(true);
 
     final var encoderConfig =
         new EncoderConfig()
@@ -61,7 +62,6 @@ public class Elevator extends SubsystemBase {
             leaderCanID,
             (config) -> {
               config
-                  .apply(commonConfig)
                   .closedLoop
                   .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                   .velocityFF(0)
@@ -72,7 +72,9 @@ public class Elevator extends SubsystemBase {
                   .maxAcceleration(kMaxAcceleration)
                   .allowedClosedLoopError(positionalTolerance);
 
+              config.apply(commonConfig);
               config.encoder.apply(encoderConfig);
+              config.signals.apply(signalsConfig);
             });
 
     motorFollower =
@@ -82,6 +84,7 @@ public class Elevator extends SubsystemBase {
               // follow leader's output (non-inverted)
               config.apply(commonConfig).follow(motorLeader);
               config.encoder.apply(encoderConfig);
+              config.signals.apply(signalsConfig);
             });
 
     encoderLeader = motorLeader.getEncoder();
@@ -112,7 +115,11 @@ public class Elevator extends SubsystemBase {
   }
 
   public boolean isAtPosition(double value) {
-    return MathUtil.isNear(value, getPosition(), positionalTolerance);
+    return isAtPosition(value, positionalTolerance);
+  }
+
+  public boolean isAtPosition(double value, double tolerance) {
+    return MathUtil.isNear(value, getPosition(), tolerance);
   }
 
   @Logged(name = "Position", importance = Importance.INFO)

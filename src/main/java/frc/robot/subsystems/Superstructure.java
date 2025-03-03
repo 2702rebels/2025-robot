@@ -27,35 +27,35 @@ public final class Superstructure extends SubsystemBase {
   private static final double kL3Height = 48;
   private static final double kL4Height = 64;
 
-  private static final double kStowedAngle = 0;
-  private static final double kFloorAngle = 0;
+  // angles are in degrees [!]
+  private static final double kTransitionAngle = 85;
+  private static final double kStowedAngle = 110;
+  private static final double kFloorAngle = 1;
   private static final double kStationAngle = 0;
-  private static final double kL1Angle = 0;
-  private static final double kL2Angle = 0;
-  private static final double kL3Angle = 0;
-  private static final double kL4Angle = 0;
+  private static final double kL1Angle = 60;
+  private static final double kL2Angle = 60;
+  private static final double kL3Angle = 60;
+  private static final double kL4Angle = 60;
+
+  private static final double kBranchMargin = 4;
+  private static final double kBranchOffset = 8;
 
   @Logged(name = "Position", importance = Importance.INFO)
   private Position position = Position.STOWED;
 
-  // delay on the game piece presence trigger to allow it fully
+  // delay on the coral presence trigger to allow it fully
   // leave the mechanism before shutting down motors, etc.
-  private static final double kHasGamePieceDelaySeconds = 0.4;
+  private static final double kHasCoralDelaySeconds = 0.4;
 
   // delay on the coral presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kCoralIntakeDelaySeconds = 0.4;
-
-  // delay on the algae presence trigger (rising edge) to allow
-  // motors to run longer when game piece is partially in
-  private static final double kAlgaeIntakeDelaySeconds = 0.4;
+  private static final double kCoralIntakeDelaySeconds = 0.5;
 
   private final RobotState state;
   private final Elevator elevator;
   private final Pivot pivot;
 
   private final SparkLimitSwitch coralSensor;
-  private final SparkLimitSwitch algaeSensor;
 
   public Superstructure(Elevator elevator, Pivot pivot, Manipulator manipulator) {
     this.state = RobotState.getInstance();
@@ -63,16 +63,24 @@ public final class Superstructure extends SubsystemBase {
     this.pivot = pivot;
 
     coralSensor = manipulator.getCoralPresenceSensor();
-    algaeSensor = pivot.getAlgaePresenceSensor();
 
     // spotless:off
-    canFloorIntake = new Trigger(() -> elevator.isAtPosition(kFloorHeight) && pivot.isAtAngle(kFloorAngle));
-    canStationIntake = new Trigger(() -> elevator.isAtPosition(kStationHeight) && pivot.isAtAngle(kStationAngle));
-    canScoreL1 = new Trigger(() -> elevator.isAtPosition(kL1Height) && pivot.isAtAngle(kL1Angle));
-    canScoreL2 = new Trigger(() -> elevator.isAtPosition(kL2Height) && pivot.isAtAngle(kL2Angle));
-    canScoreL3 = new Trigger(() -> elevator.isAtPosition(kL3Height) && pivot.isAtAngle(kL3Angle));
-    canScoreL4 = new Trigger(() -> elevator.isAtPosition(kL4Height) && pivot.isAtAngle(kL4Angle));
+    canEject = new Trigger(() -> false); // TODO: safe angle range
+    isStowed = new Trigger(() -> elevator.isAtPosition(stowedHeight.get()) && pivot.isAtAngle(stowedAngle.get()));
+    canStationIntake = new Trigger(() -> elevator.isAtPosition(stationHeight.get()) && pivot.isAtAngle(stationAngle.get()));
+    canScoreL1 = new Trigger(() -> elevator.isAtPosition(l1Height.get()) && pivot.isAtAngle(l1Angle.get()));
+    canScoreL2 = new Trigger(() -> elevator.isAtPosition(l2Height.get()) && pivot.isAtAngle(l2Angle.get()));
+    canScoreL3 = new Trigger(() -> elevator.isAtPosition(l3Height.get()) && pivot.isAtAngle(l3Angle.get()));
+    canScoreL4 = new Trigger(() -> elevator.isAtPosition(l4Height.get()) && pivot.isAtAngle(l4Angle.get()));
     // spotless:on
+
+    // use higher tolerance on the floor intake, since the elevator/pivot is moved up
+    // once the coral is consumed by the manipulator
+    canFloorIntake =
+        new Trigger(
+            () ->
+                elevator.isAtPosition(floorHeight.get(), 1)
+                    && pivot.isAtAngle(floorAngle.get(), 3));
 
     canScoreAuto =
         new Trigger(
@@ -92,8 +100,8 @@ public final class Superstructure extends SubsystemBase {
             });
 
     // spotless:off
-    hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling).debounce(kCoralIntakeDelaySeconds, DebounceType.kRising);
-    hasAlgae = new Trigger(algaeSensor::isPressed).debounce(kHasGamePieceDelaySeconds, DebounceType.kFalling).debounce(kAlgaeIntakeDelaySeconds, DebounceType.kRising);
+    hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasCoralDelaySeconds, DebounceType.kFalling).debounce(kCoralIntakeDelaySeconds, DebounceType.kRising);
+    hasAlgae = new Trigger(() -> false);
     // spotless:on
   }
 
@@ -116,6 +124,14 @@ public final class Superstructure extends SubsystemBase {
   /** Trigger for algae presence. */
   @Logged(name = "HasAlgae", importance = Importance.INFO)
   public final Trigger hasAlgae;
+
+  /** Trigger for pivot in stowed position. */
+  @Logged(name = "IsStowed", importance = Importance.INFO)
+  public final Trigger isStowed;
+
+  /** Trigger for pivot position safe for ejection. */
+  @Logged(name = "CanEject", importance = Importance.INFO)
+  public final Trigger canEject;
 
   /** Trigger for superstructure ready for floor intake */
   @Logged(name = "CanFloorIntake", importance = Importance.INFO)
@@ -263,9 +279,9 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue l4Height = profileValue("L4/Height", kL4Height);
   private static Tunable.DoubleValue l4SAngle = profileValue("L4Scored/Angle", 0);
   private static Tunable.DoubleValue l4SHeight = profileValue("L4Scored/Height", 0);
-  private static Tunable.DoubleValue branchMargin = profileValue("BranchMargin", 0);
-  private static Tunable.DoubleValue branchOffset = profileValue("BranchOffset", 0);
-  private static Tunable.DoubleValue transitionAngle = profileValue("TransitionAngle", 0);
+  private static Tunable.DoubleValue branchMargin = profileValue("BranchMargin", kBranchMargin);
+  private static Tunable.DoubleValue branchOffset = profileValue("BranchOffset", kBranchOffset);
+  private static Tunable.DoubleValue transitionAngle = profileValue("TransitionAngle", kTransitionAngle);
   // spotless:on
 
   static {

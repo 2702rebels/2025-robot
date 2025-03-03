@@ -40,8 +40,8 @@ public final class Constants {
   public static final class CanID {
     public static final int MOTOR_ELEVATOR_LEADER = 10;
     public static final int MOTOR_ELEVATOR_FOLLOWER = 11;
-    public static final int MOTOR_PIVOT_LEADER = 12;
-    public static final int MOTOR_PIVOT_FOLLOWER = 13;
+    public static final int MOTOR_PIVOT_LEADER = 13;
+    public static final int MOTOR_PIVOT_FOLLOWER = 12;
     public static final int MOTOR_MANIPULATOR_CORAL = 14;
     public static final int MOTOR_MANIPULATOR_GUIDE = 15;
   }
