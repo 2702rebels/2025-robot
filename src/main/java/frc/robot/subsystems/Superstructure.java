@@ -28,8 +28,8 @@ public final class Superstructure extends SubsystemBase {
   private static final double kL4Height = 64;
 
   // angles are in degrees [!]
-  private static final double kTransitionAngle = 85;
-  private static final double kStowedAngle = 110;
+  private static final double kStowedAngle = 130;
+  private static final double kTransitionAngle = 80;
   private static final double kFloorAngle = 1;
   private static final double kStationAngle = 0;
   private static final double kL1Angle = 60;

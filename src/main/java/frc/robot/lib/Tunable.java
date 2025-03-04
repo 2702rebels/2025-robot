@@ -37,7 +37,7 @@ import java.util.function.Supplier;
  */
 public final class Tunable {
   private static final NetworkTable nt =
-      NetworkTableInstance.getDefault().getTable(Constants.TunablePrefix);
+      NetworkTableInstance.getDefault().getTable(Constants.tunablePrefix);
 
   private static final EventLoop loop = new EventLoop();
 

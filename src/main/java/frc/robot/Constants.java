@@ -13,23 +13,26 @@ import frc.robot.generated.TunerConstants;
 public final class Constants {
   public static final class Settings {
     /** Logging */
-    public static final boolean LoggingEnabled = false;
+    public static final boolean loggingEnabled = false;
 
     /** SysId bindings */
-    public static final boolean SysIdBindings = false;
+    public static final boolean sysIdBindings = false;
 
     /** Testing mode */
-    public static final boolean TestingMode = true;
+    public static final boolean testingMode = true;
 
     /** Driving disabled */
-    public static final boolean DrivingDisabled = true;
+    public static final boolean drivingDisabled = true;
   }
 
   /** NT prefix for tunable keys */
-  public static final String TunablePrefix = "/Tunable";
+  public static final String tunablePrefix = "/Tunable";
 
   /** Robot main loop cycle period in seconds */
   public static final double cyclePeriodSeconds = 0.02;
+
+  /** Required pivot angle in the initial position (in degrees) */
+  public static final double initialPivotAngle = 140;
 
   public static final class Network {
     public static final int UDP_PORT_OBJECT_DETECTOR = 27021;

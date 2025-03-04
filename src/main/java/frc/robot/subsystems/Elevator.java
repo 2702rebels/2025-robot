@@ -21,24 +21,24 @@ import frc.robot.lib.Tunable;
 
 public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 0.01;
+  private static final double kP = 0.004;
   private static final double kD = 0;
 
   private static final double kS = 0;
   private static final double kG = 0;
-  private static final double kV = 0;
+  private static final double kV = 0.075;
   private static final double kA = 0;
-  private static final double kMaxVelocity = 64; // inch/sec
-  private static final double kMaxAcceleration = 256; // inch/sec.sq
+  private static final double kMaxVelocity = 800; // inch/sec
+  private static final double kMaxAcceleration = 800; // inch/sec.sq
 
   // conversion factor between rotation and linear movement
   // 3" wheel diameter, 8:1 reduction ratio
   private static final double conversionFactor = Math.PI * 3 / 8;
 
   // maximum safe travel
-  private static final double maxTravel = 70;
+  private static final double maxTravel = 64;
 
-  // tolerance
+  // tolerance (inches)
   private static final double tolerance = 0.5;
 
   @Logged(name = "Setpoint", importance = Importance.INFO)
@@ -63,7 +63,7 @@ public class Elevator extends SubsystemBase {
   public Elevator(int leaderCanID, int followerCanID) {
     final var commonConfig =
         new SparkMaxConfig()
-            .smartCurrentLimit(30)
+            .smartCurrentLimit(50)
             .voltageCompensation(12)
             .idleMode(IdleMode.kBrake);
 
@@ -134,15 +134,20 @@ public class Elevator extends SubsystemBase {
 
   @Override
   public void periodic() {
-    goal.position = setpoint;
+    goal.position = setpoint; // goal velocity is always zero!
     state.position = getPosition();
     state.velocity = getVelocity();
 
     // this calculate method is doing at least two new allocations... :(
     state = trapezoidProfile.calculate(Constants.cyclePeriodSeconds, state, goal);
+
+    // if kA = 0 then ff = state.velocity * kV + kG + sign (state.velocity) * kS
     final var ff = ffController.calculateWithVelocities(getVelocity(), state.velocity);
 
-    controller.setReference(state.position, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
+    // do not use FF factor if we are at setpoint (within tolerance),
+    // instead rely on the position PID controller to get/hold us there
+    controller.setReference(
+        setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0, isAtPosition(setpoint) ? 0 : ff);
   }
 
   public void reset() {

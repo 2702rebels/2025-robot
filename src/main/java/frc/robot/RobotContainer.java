@@ -16,11 +16,13 @@ import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.units.measure.Time;
+import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -57,7 +59,7 @@ public class RobotContainer {
 
   private final RobotState state;
 
-  private final Telemetry logger = new Telemetry(Constants.Settings.LoggingEnabled);
+  private final Telemetry logger = new Telemetry(Constants.Settings.loggingEnabled);
 
   private final CommandXboxController controllerDriver = new CommandXboxController(0);
 
@@ -82,6 +84,10 @@ public class RobotContainer {
   @Logged(name = "ObjectDetector", importance = Importance.INFO)
   private final ObjectDetector objectDetector = new ObjectDetector();
 
+  // startup validation checklist
+  @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
+  private boolean pivotEncoderValid = false;
+
   // path follower
   private final AutoFactory autoFactory;
   private final AutoRoutines autoRoutines;
@@ -94,7 +100,7 @@ public class RobotContainer {
     state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
 
     // configure DogLog logging
-    if (Constants.Settings.LoggingEnabled) {
+    if (Constants.Settings.loggingEnabled) {
       DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
 
       // log metadata
@@ -113,14 +119,14 @@ public class RobotContainer {
     autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
-    if (Constants.Settings.TestingMode) {
+    if (Constants.Settings.testingMode) {
       configureTesting();
     } else {
       configureBindings();
       configureTriggers();
     }
 
-    if (!Constants.Settings.DrivingDisabled) {
+    if (!Constants.Settings.drivingDisabled) {
       configureDriveBindings();
     }
   }
@@ -133,10 +139,8 @@ public class RobotContainer {
     // controllerDriver.povUp().onTrue(new InstantCommand(() -> pivot.setAngle(90), pivot));
     // controllerDriver.povDown().onTrue(new InstantCommand(() -> pivot.setAngle(10), pivot));
 
-    // controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(24),
-    // elevator));
-    // controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0),
-    // elevator));
+    controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(64), elevator));
+    controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0), elevator));
 
     // controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
     // controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
@@ -234,7 +238,7 @@ public class RobotContainer {
 
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
-    if (Constants.Settings.SysIdBindings) {
+    if (Constants.Settings.sysIdBindings) {
       controllerDriver
           .back()
           .and(controllerDriver.y())
@@ -366,6 +370,20 @@ public class RobotContainer {
   public Command getAutonomousCommand() {
     // run the routine selected from the auto chooser
     return autoChooser.selectedCommand();
+  }
+
+  /** Runs validation checklist at the startup. Must be invoked from the robotInit(). */
+  public void initValidation() {
+    // validate that pivot absolute encoder reading matches the expected angle
+    // of the mechanism in its starting configuration; this ensure that encoder
+    // is properly zeroed at the start of the match
+    pivotEncoderValid = pivot.isAtAngle(Constants.initialPivotAngle);
+
+    final var failed = !pivotEncoderValid;
+
+    if (failed) {
+      DogLog.logFault("Startup checklist failed", AlertType.kError);
+    }
   }
 
   /** Creates a command to rumble the controllers. */

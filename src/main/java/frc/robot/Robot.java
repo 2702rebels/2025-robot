@@ -54,6 +54,11 @@ public class Robot extends TimedRobot {
   }
 
   @Override
+  public void robotInit() {
+    robotContainer.initValidation();
+  }
+
+  @Override
   public void robotPeriodic() {
     Tunable.periodic();
 
