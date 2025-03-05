@@ -12,7 +12,6 @@ import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.controller.ElevatorFeedforward;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
@@ -21,22 +20,23 @@ import frc.robot.lib.Tunable;
 
 public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 0.004;
-  private static final double kD = 0;
+  // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
+  // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
+  private static final double __kP = 0.008;
+  private static final double __kD = 0;
 
-  private static final double kS = 0;
-  private static final double kG = 0;
-  private static final double kV = 0.075;
-  private static final double kA = 0;
-  private static final double kMaxVelocity = 800; // inch/sec
-  private static final double kMaxAcceleration = 800; // inch/sec.sq
+  private static final double __kG0 = 0;
+  private static final double __kG1 = 0.3;
+  private static final double __kV = 0.075;
+  private static final double __kMaxVelocity = 100; // inch/sec
+  private static final double __kMaxAcceleration = 400; // inch/sec.sq
 
-  // conversion factor between rotation and linear movement
+  // conversion factor between rotation and  linear movement
   // 3" wheel diameter, 8:1 reduction ratio
   private static final double conversionFactor = Math.PI * 3 / 8;
 
   // maximum safe travel
-  private static final double maxTravel = 64;
+  private static final double maxTravel = 66;
 
   // tolerance (inches)
   private static final double tolerance = 0.5;
@@ -54,7 +54,6 @@ public class Elevator extends SubsystemBase {
   private final RelativeEncoder encoderFollower;
   private final SparkClosedLoopController controller;
 
-  private final ElevatorFeedforward ffController;
   private TrapezoidProfile trapezoidProfile;
 
   private TrapezoidProfile.State state = new TrapezoidProfile.State(0, 0);
@@ -67,7 +66,12 @@ public class Elevator extends SubsystemBase {
             .voltageCompensation(12)
             .idleMode(IdleMode.kBrake);
 
-    final var signalsConfig = new SignalsConfig().primaryEncoderPositionAlwaysOn(true);
+    final var signalsConfig =
+        new SignalsConfig()
+            .primaryEncoderPositionAlwaysOn(true)
+            .primaryEncoderVelocityAlwaysOn(true)
+            .primaryEncoderPositionPeriodMs(10)
+            .primaryEncoderVelocityPeriodMs(10);
 
     final var encoderConfig =
         new EncoderConfig()
@@ -82,11 +86,11 @@ public class Elevator extends SubsystemBase {
                   .closedLoop
                   .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                   .velocityFF(0)
-                  .p(kP)
-                  .d(kD)
+                  .p(__kP)
+                  .d(__kD)
                   .maxMotion
-                  .maxVelocity(kMaxVelocity)
-                  .maxAcceleration(kMaxAcceleration)
+                  .maxVelocity(__kMaxVelocity)
+                  .maxAcceleration(__kMaxAcceleration)
                   .allowedClosedLoopError(tolerance);
 
               config.apply(commonConfig);
@@ -111,25 +115,21 @@ public class Elevator extends SubsystemBase {
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Elevator", motorLeader, ClosedLoopSlot.kSlot0);
 
-    ffController = new ElevatorFeedforward(kS, kG, kV, kA);
     trapezoidProfile =
         new TrapezoidProfile(
-            new TrapezoidProfile.Constraints(maxVelocity.get(), maxAcceleration.get()));
-
-    // make FF configuration tunable
-    Tunable.bind("Elevator/FF", ffController);
+            new TrapezoidProfile.Constraints(kMaxVelocity.get(), kMaxAcceleration.get()));
 
     reset();
   }
 
   private void updateMaxVelocity(double value) {
     trapezoidProfile =
-        new TrapezoidProfile(new TrapezoidProfile.Constraints(value, maxAcceleration.get()));
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(value, kMaxAcceleration.get()));
   }
 
   private void updateMaxAcceleration(double value) {
     trapezoidProfile =
-        new TrapezoidProfile(new TrapezoidProfile.Constraints(maxVelocity.get(), value));
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(kMaxVelocity.get(), value));
   }
 
   @Override
@@ -141,13 +141,24 @@ public class Elevator extends SubsystemBase {
     // this calculate method is doing at least two new allocations... :(
     state = trapezoidProfile.calculate(Constants.cyclePeriodSeconds, state, goal);
 
-    // if kA = 0 then ff = state.velocity * kV + kG + sign (state.velocity) * kS
-    final var ff = ffController.calculateWithVelocities(getVelocity(), state.velocity);
+    // elevator's effective weight changes as it extends higher, since
+    // more sections need to be supported, this requires different kG
+    // values to be applied when elevator is near ground vs. extended
+    //
+    // kG0 - applied when elevator is near zero
+    // kG1 - applied otherwise
+    //
+    // we don't use ElevatorFeedforward, instead we just use the basic FF
+    // formula directly here since we have no kS nor kA components
+    //
+    // we don't apply velocity component (kV) when elevator is at setpoint
+    // to reduce jittering, relying instead of kG and PID controls
 
-    // do not use FF factor if we are at setpoint (within tolerance),
-    // instead rely on the position PID controller to get/hold us there
+    final var gravityFF = getPosition() < 16 ? kG0.get() : kG1.get(); // kG0 below 16"
+    final var velocityFF = isAtPosition(setpoint) ? 0 : state.velocity * kV.get();
+
     controller.setReference(
-        setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0, isAtPosition(setpoint) ? 0 : ff);
+        setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0, gravityFF + velocityFF);
   }
 
   public void reset() {
@@ -207,7 +218,10 @@ public class Elevator extends SubsystemBase {
   }
 
   // spotless:off
-  private Tunable.DoubleValue maxVelocity = Tunable.value("Elevator/FF/MaxVelocity", kMaxVelocity, this::updateMaxVelocity);
-  private Tunable.DoubleValue maxAcceleration = Tunable.value("Elevator/FF/MaxAcceleration", kMaxAcceleration, this::updateMaxAcceleration);
+  private Tunable.DoubleValue kG0 = Tunable.value("Elevator/FF/kG0", __kG0);
+  private Tunable.DoubleValue kG1 = Tunable.value("Elevator/FF/kG1", __kG1);
+  private Tunable.DoubleValue kV = Tunable.value("Elevator/FF/kV", __kV);
+  private Tunable.DoubleValue kMaxVelocity = Tunable.value("Elevator/FF/MaxVelocity", __kMaxVelocity, this::updateMaxVelocity);
+  private Tunable.DoubleValue kMaxAcceleration = Tunable.value("Elevator/FF/MaxAcceleration", __kMaxAcceleration, this::updateMaxAcceleration);
   // spotless:on
 }

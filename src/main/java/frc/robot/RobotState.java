@@ -98,6 +98,12 @@ public class RobotState {
 
     /** Score coral at L2, L3, L4 per reef scoring strategy */
     CORAL_SCORE_AUTO,
+
+    /** Intake algae */
+    ALGAE_INTAKE,
+
+    /** Eject algae */
+    ALGAE_EJECT,
   }
 
   public static enum ScoringStrategy {
@@ -146,6 +152,12 @@ public class RobotState {
 
   @Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
   public final Trigger shouldScoreCoral = shouldScoreCoralL1.or(shouldScoreCoralAuto);
+
+  @Logged(name = "ShouldIntakeAlgae", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgae = new Trigger(() -> intent == Intent.ALGAE_INTAKE);
+
+  @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
+  public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.ALGAE_EJECT);
   // spotless:on
 
   /** Binds external historical pose supplier. */

@@ -17,7 +17,7 @@ public final class Manipulator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
   private static final double CORAL_INTAKE_VELOCITY = 0.75;
   private static final double CORAL_INTAKE_VELOCITY_GUIDE = 0.75;
-  private static final double CORAL_EJECT_VELOCITY = 0.5;
+  private static final double CORAL_EJECT_VELOCITY = 0.4;
 
   private static final double ALGAE_INTAKE_VELOCITY = 0.5;
   private static final double ALGAE_EJECT_VELOCITY = 0.5;

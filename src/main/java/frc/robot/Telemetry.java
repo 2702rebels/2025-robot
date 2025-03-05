@@ -43,6 +43,7 @@ public class Telemetry {
 
   public Telemetry(boolean loggingEnabled) {
     if (loggingEnabled) {
+      SignalLogger.setPath("/u/logs/ctre/");
       SignalLogger.start();
     }
   }

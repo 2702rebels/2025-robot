@@ -43,6 +43,7 @@ public class WheelDiameterCharacterization extends Command {
 
   @Override
   public void initialize() {
+    System.out.println("Wheel characterization initialized");
     final var state = drivetrain.getState();
 
     totalRotationRadians = 0.0;
@@ -83,20 +84,20 @@ public class WheelDiameterCharacterization extends Command {
     estimatedWheelRadius = (totalRotationRadians * turnRadius) / averageWheelDistanceRadians;
 
     // spotless:off
-    DogLog.log("Drive/Wheel Diameter/Wheel Radians", averageWheelDistanceRadians);
-    DogLog.log("Drive/Wheel Diameter/Rotation Radians", totalRotationRadians);
-    DogLog.log("Drive/Wheel Diameter/Estimated Diameter", Units.metersToInches(estimatedWheelRadius * 2));
+    DogLog.log("Drive/WheelCharacterization/Wheel Radians", Math.abs(averageWheelDistanceRadians));
+    DogLog.log("Drive/WheelCharacterization/Rotation Radians", Math.abs(totalRotationRadians));
+    DogLog.log("Drive/WheelCharacterization/Estimated Radius", Units.metersToInches(Math.abs(estimatedWheelRadius)));
     // spotless:on
   }
 
   @Override
   public void end(boolean interrupted) {
-    if (totalRotationRadians <= Math.PI * 2.0) {
+    if (Math.abs(totalRotationRadians) <= Math.PI * 2.0) {
       System.out.println("Insufficient data collected for characterization");
     } else {
       System.out.println(
-          "Effective wheel diameter: "
-              + Units.metersToInches(estimatedWheelRadius * 2)
+          "Effective wheel radius: "
+              + Units.metersToInches(Math.abs(estimatedWheelRadius))
               + " inches");
     }
   }

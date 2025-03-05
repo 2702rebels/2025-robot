@@ -19,26 +19,36 @@ import java.util.Map;
  */
 public final class Superstructure extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kStowedHeight = 0;
-  private static final double kFloorHeight = 0;
-  private static final double kStationHeight = 0;
-  private static final double kL1Height = 16;
-  private static final double kL2Height = 32;
-  private static final double kL3Height = 48;
-  private static final double kL4Height = 64;
+  // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
+  // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
+  private static final double __kStowedHeight = 0;
+  private static final double __kFloorHeight = 0;
+  private static final double __kStationHeight = 0;
+  private static final double __kL1Height = 16;
+  private static final double __kL2Height = 31;
+  private static final double __kL3Height = 47;
+  private static final double __kL4Height = 64;
+  private static final double __kL4SHeight = 46;
 
   // angles are in degrees [!]
-  private static final double kStowedAngle = 130;
-  private static final double kTransitionAngle = 80;
-  private static final double kFloorAngle = 1;
-  private static final double kStationAngle = 0;
-  private static final double kL1Angle = 60;
-  private static final double kL2Angle = 60;
-  private static final double kL3Angle = 60;
-  private static final double kL4Angle = 60;
+  private static final double __kStowedAngle = 130;
+  private static final double __kTransitionAngle = 80;
+  private static final double __kStowedAlgaeAngle = 70;
+  private static final double __kTransitionAlgaeAngle = 30;
+  private static final double __kFloorAngle = 1;
+  private static final double __kStationAngle = 0;
+  private static final double __kL1Angle = 25;
+  private static final double __kL2Angle = 4;
+  private static final double __kL3Angle = 4;
+  private static final double __kL4Angle = 80;
+  private static final double __kL4SAngle = 80;
 
-  private static final double kBranchMargin = 4;
-  private static final double kBranchOffset = 8;
+  private static final double __kBranchMargin = 4;
+  private static final double __kBranchOffset = 8;
+
+  private static final double kSafeEjectAngle = 50;
+  private static final double kAngleTolerance = 2;
+  private static final double kElevatorTolerance = 1;
 
   @Logged(name = "Position", importance = Importance.INFO)
   private Position position = Position.STOWED;
@@ -65,13 +75,13 @@ public final class Superstructure extends SubsystemBase {
     coralSensor = manipulator.getCoralPresenceSensor();
 
     // spotless:off
-    canEject = new Trigger(() -> false); // TODO: safe angle range
-    isStowed = new Trigger(() -> elevator.isAtPosition(stowedHeight.get()) && pivot.isAtAngle(stowedAngle.get()));
-    canStationIntake = new Trigger(() -> elevator.isAtPosition(stationHeight.get()) && pivot.isAtAngle(stationAngle.get()));
-    canScoreL1 = new Trigger(() -> elevator.isAtPosition(l1Height.get()) && pivot.isAtAngle(l1Angle.get()));
-    canScoreL2 = new Trigger(() -> elevator.isAtPosition(l2Height.get()) && pivot.isAtAngle(l2Angle.get()));
-    canScoreL3 = new Trigger(() -> elevator.isAtPosition(l3Height.get()) && pivot.isAtAngle(l3Angle.get()));
-    canScoreL4 = new Trigger(() -> elevator.isAtPosition(l4Height.get()) && pivot.isAtAngle(l4Angle.get()));
+    canEject = new Trigger(() -> pivot.getAngle() <= kSafeEjectAngle);
+    isStowed = new Trigger(() -> elevator.isAtPosition(kStowedHeight.get()) && pivot.isAtAngle(kStowedAngle.get()));
+    canStationIntake = new Trigger(() -> elevator.isAtPosition(kStationHeight.get()) && pivot.isAtAngle(kStationAngle.get()));
+    canScoreL1 = new Trigger(() -> elevator.isAtPosition(kL1Height.get()) && pivot.isAtAngle(kL1Angle.get()));
+    canScoreL2 = new Trigger(() -> elevator.isAtPosition(kL2Height.get()) && pivot.isAtAngle(kL2Angle.get()));
+    canScoreL3 = new Trigger(() -> elevator.isAtPosition(kL3Height.get()) && pivot.isAtAngle(kL3Angle.get()));
+    canScoreL4 = new Trigger(() -> elevator.isAtPosition(kL4Height.get()) && pivot.isAtAngle(kL4Angle.get()));
     // spotless:on
 
     // use higher tolerance on the floor intake, since the elevator/pivot is moved up
@@ -79,8 +89,8 @@ public final class Superstructure extends SubsystemBase {
     canFloorIntake =
         new Trigger(
             () ->
-                elevator.isAtPosition(floorHeight.get(), 1)
-                    && pivot.isAtAngle(floorAngle.get(), 3));
+                elevator.isAtPosition(kFloorHeight.get(), 1)
+                    && pivot.isAtAngle(kFloorAngle.get(), 3));
 
     canScoreAuto =
         new Trigger(
@@ -202,14 +212,9 @@ public final class Superstructure extends SubsystemBase {
     pivot.setAngle(setpoint.getSecond());
   }
 
-  /** Returns current height of the elevator. */
-  private double getElevatorHeight() {
-    return elevator.getLeaderPosition();
-  }
-
   /** Returns the next setpoint for elevator and pivot. */
   private Pair<Double, Double> getSetpoint() {
-    final var height = getElevatorHeight();
+    final var height = elevator.getPosition();
     final var profile = positionProfiles.get(position);
 
     final var targetHeight = profile.getFirst();
@@ -221,7 +226,8 @@ public final class Superstructure extends SubsystemBase {
       return Pair.of(targetHeight, targetAngle);
     }
 
-    final var branchHeight = targetHeight - branchOffset.get();
+    final var branchHeight = targetHeight - kBranchOffset.get();
+    final var transitionAngle = kTransitionAngle.get();
 
     // if the mechanism is above the requested position, then we should first go to
     // the requested profile branching point while maintaining pivot at the transition angle,
@@ -229,13 +235,22 @@ public final class Superstructure extends SubsystemBase {
     //
     // use safety margin when testing to prevent falling into this case when we are
     // trying to reach the profile height from below and overshooting slightly
-    if (height > targetHeight + branchMargin.get()) {
-      return Pair.of(branchHeight, transitionAngle.get());
+    if (height > targetHeight + kBranchMargin.get()) {
+      return Pair.of(branchHeight, transitionAngle);
     }
 
     // otherwise elevate the pivot to the desired height, but do not rotate the pivot
     // until we are above the branching point
-    return Pair.of(targetHeight, height >= branchHeight ? targetAngle : transitionAngle.get());
+
+    // safety rules
+    // do not allow pivot to stow unless elevator height is near zero
+    // do not allow elevator to go up unless pivot is at transition angle or less
+    final var pivotAngle = pivot.getAngle();
+    final var desiredAngle = height >= branchHeight ? targetAngle : transitionAngle;
+
+    return Pair.of(
+        pivotAngle <= transitionAngle + kAngleTolerance ? targetHeight : 0,
+        height > kElevatorTolerance ? Math.min(desiredAngle, transitionAngle) : desiredAngle);
   }
 
   private static Map<Position, Pair<Double, Double>> positionProfiles = new HashMap<>();
@@ -246,14 +261,14 @@ public final class Superstructure extends SubsystemBase {
     // caching prevents unnecessary allocations and improves lookup time
 
     // spotless:off
-    positionProfiles.put(Position.STOWED, Pair.of(stowedHeight.get(), stowedAngle.get()));
-    positionProfiles.put(Position.FLOOR, Pair.of(floorHeight.get(), floorAngle.get()));
-    positionProfiles.put(Position.STATION, Pair.of(stationHeight.get(), stationAngle.get()));
-    positionProfiles.put(Position.L1, Pair.of(l1Height.get(), l1Angle.get()));
-    positionProfiles.put(Position.L2, Pair.of(l2Height.get(), l2Angle.get()));
-    positionProfiles.put(Position.L3, Pair.of(l3Height.get(), l3Angle.get()));
-    positionProfiles.put(Position.L4, Pair.of(l4Height.get(), l4Angle.get()));
-    positionProfiles.put(Position.L4_SCORED, Pair.of(l4SHeight.get(), l4SAngle.get()));
+    positionProfiles.put(Position.STOWED, Pair.of(kStowedHeight.get(), kStowedAngle.get()));
+    positionProfiles.put(Position.FLOOR, Pair.of(kFloorHeight.get(), kFloorAngle.get()));
+    positionProfiles.put(Position.STATION, Pair.of(kStationHeight.get(), kStationAngle.get()));
+    positionProfiles.put(Position.L1, Pair.of(kL1Height.get(), kL1Angle.get()));
+    positionProfiles.put(Position.L2, Pair.of(kL2Height.get(), kL2Angle.get()));
+    positionProfiles.put(Position.L3, Pair.of(kL3Height.get(), kL3Angle.get()));
+    positionProfiles.put(Position.L4, Pair.of(kL4Height.get(), kL4Angle.get()));
+    positionProfiles.put(Position.L4_SCORED, Pair.of(kL4SHeight.get(), kL4SAngle.get()));
     // spotless:on
   }
 
@@ -263,25 +278,27 @@ public final class Superstructure extends SubsystemBase {
   }
 
   // spotless:off
-  private static Tunable.DoubleValue stowedAngle = profileValue("Stowed/Angle", kStowedAngle);
-  private static Tunable.DoubleValue stowedHeight = profileValue("Stowed/Height", kStowedHeight);
-  private static Tunable.DoubleValue floorAngle = profileValue("Floor/Angle", kFloorAngle);
-  private static Tunable.DoubleValue floorHeight = profileValue("Floor/Height", kFloorHeight);
-  private static Tunable.DoubleValue stationAngle = profileValue("Station/Angle", kStationAngle);
-  private static Tunable.DoubleValue stationHeight = profileValue("Station/Height", kStationHeight);
-  private static Tunable.DoubleValue l1Angle = profileValue("L1/Angle", kL1Angle);
-  private static Tunable.DoubleValue l1Height = profileValue("L1/Height", kL1Height);
-  private static Tunable.DoubleValue l2Angle = profileValue("L2/Angle", kL2Angle);
-  private static Tunable.DoubleValue l2Height = profileValue("L2/Height", kL2Height);
-  private static Tunable.DoubleValue l3Angle = profileValue("L3/Angle", kL3Angle);
-  private static Tunable.DoubleValue l3Height = profileValue("L3/Height", kL3Height);
-  private static Tunable.DoubleValue l4Angle = profileValue("L4/Angle", kL4Angle);
-  private static Tunable.DoubleValue l4Height = profileValue("L4/Height", kL4Height);
-  private static Tunable.DoubleValue l4SAngle = profileValue("L4Scored/Angle", 0);
-  private static Tunable.DoubleValue l4SHeight = profileValue("L4Scored/Height", 0);
-  private static Tunable.DoubleValue branchMargin = profileValue("BranchMargin", kBranchMargin);
-  private static Tunable.DoubleValue branchOffset = profileValue("BranchOffset", kBranchOffset);
-  private static Tunable.DoubleValue transitionAngle = profileValue("TransitionAngle", kTransitionAngle);
+  private static Tunable.DoubleValue kStowedAngle = profileValue("Stowed/Angle", __kStowedAngle);
+  private static Tunable.DoubleValue kStowedHeight = profileValue("Stowed/Height", __kStowedHeight);
+  private static Tunable.DoubleValue kFloorAngle = profileValue("Floor/Angle", __kFloorAngle);
+  private static Tunable.DoubleValue kFloorHeight = profileValue("Floor/Height", __kFloorHeight);
+  private static Tunable.DoubleValue kStationAngle = profileValue("Station/Angle", __kStationAngle);
+  private static Tunable.DoubleValue kStationHeight = profileValue("Station/Height", __kStationHeight);
+  private static Tunable.DoubleValue kL1Angle = profileValue("L1/Angle", __kL1Angle);
+  private static Tunable.DoubleValue kL1Height = profileValue("L1/Height", __kL1Height);
+  private static Tunable.DoubleValue kL2Angle = profileValue("L2/Angle", __kL2Angle);
+  private static Tunable.DoubleValue kL2Height = profileValue("L2/Height", __kL2Height);
+  private static Tunable.DoubleValue kL3Angle = profileValue("L3/Angle", __kL3Angle);
+  private static Tunable.DoubleValue kL3Height = profileValue("L3/Height", __kL3Height);
+  private static Tunable.DoubleValue kL4Angle = profileValue("L4/Angle", __kL4Angle);
+  private static Tunable.DoubleValue kL4Height = profileValue("L4/Height", __kL4Height);
+  private static Tunable.DoubleValue kL4SAngle = profileValue("L4Scored/Angle", __kL4SAngle);
+  private static Tunable.DoubleValue kL4SHeight = profileValue("L4Scored/Height", __kL4SHeight);
+  private static Tunable.DoubleValue kBranchMargin = profileValue("BranchMargin", __kBranchMargin);
+  private static Tunable.DoubleValue kBranchOffset = profileValue("BranchOffset", __kBranchOffset);
+  private static Tunable.DoubleValue kTransitionAngle = profileValue("TransitionAngle", __kTransitionAngle);
+  private static Tunable.DoubleValue kTransitionAlgaeAngle = profileValue("TransitionAlgaeAngle", __kTransitionAlgaeAngle);
+  private static Tunable.DoubleValue kStowedAlgaeAngle = profileValue("StowedAlgaeAngle", __kStowedAlgaeAngle);
   // spotless:on
 
   static {

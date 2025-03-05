@@ -13,7 +13,7 @@ import frc.robot.generated.TunerConstants;
 public final class Constants {
   public static final class Settings {
     /** Logging */
-    public static final boolean loggingEnabled = false;
+    public static final boolean loggingEnabled = true;
 
     /** SysId bindings */
     public static final boolean sysIdBindings = false;
@@ -22,7 +22,7 @@ public final class Constants {
     public static final boolean testingMode = true;
 
     /** Driving disabled */
-    public static final boolean drivingDisabled = true;
+    public static final boolean drivingDisabled = false;
   }
 
   /** NT prefix for tunable keys */

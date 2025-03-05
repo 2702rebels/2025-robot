@@ -55,6 +55,9 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   // keep track if we've ever applied the operator perspective before or not
   private boolean hasAppliedOperatorPerspective = false;
 
+  // swerve request to apply for brake position (X configuration)
+  private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+
   // swerve request to apply during field-centric path following
   private final SwerveRequest.ApplyFieldSpeeds pathApplyFieldSpeeds =
       new SwerveRequest.ApplyFieldSpeeds();
@@ -288,6 +291,15 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    */
   public Command applyRequest(Supplier<SwerveRequest> requestSupplier) {
     return run(() -> this.setControl(requestSupplier.get()));
+  }
+
+  /**
+   * Returns a command that applies break position (X).
+   *
+   * @return Command to run
+   */
+  public Command brake() {
+    return run(() -> this.setControl(brake));
   }
 
   /**

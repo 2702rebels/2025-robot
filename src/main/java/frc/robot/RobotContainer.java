@@ -14,7 +14,6 @@ import dev.doglog.DogLog;
 import dev.doglog.DogLogOptions;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -22,7 +21,6 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -47,12 +45,11 @@ public class RobotContainer {
   // setting up bindings for necessary control of the swerve drive platform
   private final SwerveRequest.FieldCentric drive =
       new SwerveRequest.FieldCentric()
-          .withDeadband(maxSpeedMetersPerSecond * 0.1)
-          .withRotationalDeadband(maxAngularRateRadiansPerSecond * 0.1) // add a 10% deadband
+          .withDeadband(maxSpeedMetersPerSecond * 0.05)
+          .withRotationalDeadband(maxAngularRateRadiansPerSecond * 0.05) // add a 5% deadband
           .withDriveRequestType(
               DriveRequestType.OpenLoopVoltage); // use open-loop control for drive motors
 
-  private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
   private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
   private final SwerveRequest.RobotCentric forwardStraight =
       new SwerveRequest.RobotCentric().withDriveRequestType(DriveRequestType.OpenLoopVoltage);
@@ -136,11 +133,24 @@ public class RobotContainer {
     // reset the intent
     controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
 
+    controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_AUTO));
+    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
+    controllerDriver.b().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+
+    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE));
+    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_EJECT));
+
     // controllerDriver.povUp().onTrue(new InstantCommand(() -> pivot.setAngle(90), pivot));
     // controllerDriver.povDown().onTrue(new InstantCommand(() -> pivot.setAngle(10), pivot));
 
-    controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(64), elevator));
-    controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0), elevator));
+    // controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(12),
+    // elevator));
+    // controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0),
+    // elevator));
+
+    // controllerDriver.povLeft().onTrue(new InstantCommand(() -> pivot.setAngle(0), pivot));
+    // controllerDriver.povRight().onTrue(new InstantCommand(() -> pivot.setAngle(80), pivot));
 
     // controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
     // controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
@@ -152,6 +162,12 @@ public class RobotContainer {
     // state.shouldIntakeCoralFloor.whileTrue(superstructure.setPosition(Position.STOWED));
 
     // controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
+
+    // intake algae
+    state.shouldIntakeAlgae.whileTrue(manipulator.intakeAlgae());
+
+    // eject algae
+    state.shouldEjectAlgae.whileTrue(manipulator.ejectAlgae());
 
     // intake coral from the floor
     state
@@ -175,11 +191,26 @@ public class RobotContainer {
         .and(superstructure.hasCoral.negate())
         .onTrue(state.setIntent(Intent.NONE));
 
+    // brake to prevent robot backing when operating elevator/pivot
+    state.shouldScoreCoral.and(state.shouldScoreCoralL1.negate()).whileTrue(drivetrain.brake());
+
     // score coral at L1
     state
         .shouldScoreCoralL1
         .and(superstructure.hasCoral)
         .onTrue(superstructure.setPosition(Position.L1));
+
+    state
+        .shouldScoreCoralAuto
+        .and(superstructure.hasCoral)
+        .onTrue(superstructure.setAutoScoringPosition());
+
+    // state
+    //     .shouldScoreCoralAuto
+    //     .and(superstructure.hasCoral)
+    //     .and(superstructure.targetsL4.negate())
+    //     .and(superstructure.canScoreAuto)
+    //     .whileTrue(manipulator.ejectCoral());
 
     // state
     //     .shouldScoreCoralL1
@@ -209,36 +240,40 @@ public class RobotContainer {
                     .withVelocityY(-controllerDriver.getLeftX() * maxSpeedMetersPerSecond)
                     // drive counterclockwise with negative X (left)
                     .withRotationalRate(
-                        -controllerDriver.getRightX() * maxAngularRateRadiansPerSecond)));
+                        controllerDriver.getRightX() * maxAngularRateRadiansPerSecond)));
 
     // reset the field-centric heading on left bumper press
     controllerDriver.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
 
     // set brake position (X) when holding A
-    controllerDriver.a().whileTrue(drivetrain.applyRequest(() -> brake));
+    controllerDriver.a().whileTrue(drivetrain.brake());
 
-    controllerDriver
-        .b()
-        .whileTrue(
-            drivetrain.applyRequest(
-                () ->
-                    point.withModuleDirection(
-                        new Rotation2d(
-                            -controllerDriver.getLeftX(), -controllerDriver.getLeftY()))));
-
-    controllerDriver
-        .pov(0)
-        .whileTrue(
-            drivetrain.applyRequest(() -> forwardStraight.withVelocityX(0.5).withVelocityY(0)));
-
-    controllerDriver
-        .pov(180)
-        .whileTrue(
-            drivetrain.applyRequest(() -> forwardStraight.withVelocityX(-0.5).withVelocityY(0)));
+    // controllerDriver
+    //     .b()
+    //     .whileTrue(
+    //         drivetrain.applyRequest(
+    //             () ->
+    //                 point.withModuleDirection(
+    //                     new Rotation2d(
+    //                         -controllerDriver.getLeftX(), -controllerDriver.getLeftY()))));
 
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
     if (Constants.Settings.sysIdBindings) {
+      controllerDriver
+          .povUp()
+          .whileTrue(
+              drivetrain.applyRequest(() -> forwardStraight.withVelocityX(0.5).withVelocityY(0)));
+
+      controllerDriver
+          .povDown()
+          .whileTrue(
+              drivetrain.applyRequest(() -> forwardStraight.withVelocityX(-0.5).withVelocityY(0)));
+
+      // controllerDriver.leftBumper().whileTrue(new WheelDiameterCharacterization(drivetrain, 1));
+      // controllerDriver.rightBumper().whileTrue(new WheelDiameterCharacterization(drivetrain,
+      // -1));
+
       controllerDriver
           .back()
           .and(controllerDriver.y())

@@ -14,6 +14,7 @@ import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ArmFeedforward;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.lib.LoggedSparkMax;
@@ -21,18 +22,20 @@ import frc.robot.lib.Tunable;
 
 public class Pivot extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double kP = 0.01;
-  private static final double kD = 0.;
+  // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
+  // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
+  private static final double __kP = 0.005;
+  private static final double __kD = 0.;
 
-  private static final double kS = 0;
-  private static final double kG = 0;
-  private static final double kV = 0;
-  private static final double kA = 0;
-  private static final double kMaxVelocity = 180; // degrees/s
-  private static final double kMaxAcceleration = kMaxVelocity * 4; // degrees/s^2
+  private static final double __kS = 0;
+  private static final double __kG = 0.7;
+  private static final double __kV = 0.012;
+  private static final double __kA = 0;
+  private static final double __kMaxVelocity = 480; // degrees/s
+  private static final double __kMaxAcceleration = 1920; // degrees/s^2
 
   // maximum safe angle (degrees)
-  private static final double maxAngle = 115;
+  private static final double maxAngle = 140;
 
   // tolerance (degrees)
   private static final double tolerance = 2.5;
@@ -58,7 +61,7 @@ public class Pivot extends SubsystemBase {
   public Pivot(int leaderCanID, int followerCanID) {
     final var commonConfig =
         new SparkMaxConfig()
-            .smartCurrentLimit(30)
+            .smartCurrentLimit(50)
             .voltageCompensation(12)
             .idleMode(IdleMode.kBrake);
 
@@ -70,19 +73,23 @@ public class Pivot extends SubsystemBase {
             (config) -> {
               config.inverted(true);
 
+              // IMPORTANT!
+              // REV documentation claims that velocity should be reported in RPMs,
+              // however, we observe values reported in what seems to be rotations/second
+              // velocityConversionFactor is therefore set to 360 not 60
               config
                   .absoluteEncoder
                   .zeroCentered(true)
                   .inverted(true)
                   .positionConversionFactor(360) // degrees
-                  .velocityConversionFactor(360 / 60); // degrees/second
+                  .velocityConversionFactor(360); // degrees/second
 
               config
                   .closedLoop
                   .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
                   .velocityFF(0)
-                  .p(kP)
-                  .d(kD);
+                  .p(__kP)
+                  .d(__kD);
 
               config.apply(commonConfig);
               config.signals.apply(signalsConfig);
@@ -103,10 +110,10 @@ public class Pivot extends SubsystemBase {
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Pivot", motorLeader, ClosedLoopSlot.kSlot0);
 
-    ffController = new ArmFeedforward(kS, kG, kV, kA);
+    ffController = new ArmFeedforward(__kS, __kG, __kV, __kA);
     trapezoidProfile =
         new TrapezoidProfile(
-            new TrapezoidProfile.Constraints(maxVelocity.get(), maxAcceleration.get()));
+            new TrapezoidProfile.Constraints(kMaxVelocity.get(), kMaxAcceleration.get()));
 
     // make FF configuration tunable
     Tunable.bind("Pivot/FF", ffController);
@@ -114,12 +121,12 @@ public class Pivot extends SubsystemBase {
 
   private void updateMaxVelocity(double value) {
     trapezoidProfile =
-        new TrapezoidProfile(new TrapezoidProfile.Constraints(value, maxAcceleration.get()));
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(value, kMaxAcceleration.get()));
   }
 
   private void updateMaxAcceleration(double value) {
     trapezoidProfile =
-        new TrapezoidProfile(new TrapezoidProfile.Constraints(maxVelocity.get(), value));
+        new TrapezoidProfile(new TrapezoidProfile.Constraints(kMaxVelocity.get(), value));
   }
 
   @Override
@@ -130,9 +137,13 @@ public class Pivot extends SubsystemBase {
 
     // this calculate method is doing at least two new allocations... :(
     state = trapezoidProfile.calculate(Constants.cyclePeriodSeconds, state, goal);
-    final var ff = ffController.calculate(state.position, state.velocity);
 
-    controller.setReference(state.position, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
+    // do not include velocity component when at setpoint (within tolerance)
+    final var ff =
+        ffController.calculate(
+            Units.degreesToRadians(state.position), isAtAngle(setpoint) ? 0 : state.velocity);
+
+    controller.setReference(setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
   }
 
   /**
@@ -177,7 +188,7 @@ public class Pivot extends SubsystemBase {
   }
 
   // spotless:off
-  private Tunable.DoubleValue maxVelocity = Tunable.value("Pivot/FF/MaxVelocity", kMaxVelocity, this::updateMaxVelocity);
-  private Tunable.DoubleValue maxAcceleration = Tunable.value("Pivot/FF/MaxAcceleration", kMaxAcceleration, this::updateMaxAcceleration);
+  private Tunable.DoubleValue kMaxVelocity = Tunable.value("Pivot/FF/MaxVelocity", __kMaxVelocity, this::updateMaxVelocity);
+  private Tunable.DoubleValue kMaxAcceleration = Tunable.value("Pivot/FF/MaxAcceleration", __kMaxAcceleration, this::updateMaxAcceleration);
   // spotless:on
 }

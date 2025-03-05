@@ -23,11 +23,11 @@ public class TunerConstants {
   // output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
   private static final Slot0Configs steerGains =
       new Slot0Configs()
-          .withKP(20)
+          .withKP(90)
           .withKI(0)
-          .withKD(0)
+          .withKD(0.1)
           .withKS(0.1)
-          .withKV(0) // 2.85
+          .withKV(2.85)
           .withKA(0)
           .withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign);
 
@@ -80,17 +80,17 @@ public class TunerConstants {
   // All swerve devices must share the same CAN bus
   public static final CANBus kCANBus = new CANBus("DRIVETRAIN", "./logs/drivetrain.hoot");
 
-  // Theoretical free speed (m/s) at 12 V applied output;
+  // Theoretical free speed at 12 V applied output;
   // This needs to be tuned to your individual robot
-  public static final LinearVelocity kSpeedAt12Volts = MetersPerSecond.of(4.5);
+  public static final LinearVelocity kSpeedAt12Volts = FeetPerSecond.of(12);
 
   // Every 1 rotation of the azimuth results in kCoupleRatio drive motor turns;
   // This may need to be tuned to your individual robot
   private static final double kCoupleRatio = 0;
 
-  private static final double kDriveGearRatio = 5.5;
+  private static final double kDriveGearRatio = 4.71;
   private static final double kSteerGearRatio = 46.42;
-  private static final Distance kWheelRadius = Inches.of(1.55);
+  private static final Distance kWheelRadius = Inches.of(1.53);
 
   private static final boolean kInvertLeftSide = false;
   private static final boolean kInvertRightSide = true;
