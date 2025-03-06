@@ -1,0 +1,107 @@
+package frc.robot.subsystems;
+
+import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.RobotController;
+import frc.robot.Constants;
+import frc.robot.lib.AprilTagPose;
+import frc.robot.lib.TimestampedTranslation2d;
+import frc.robot.lib.TimestampedValue;
+import frc.robot.lib.UdpListenerThread;
+import frc.robot.lib.VisionPacket;
+import frc.robot.lib.VisionPose;
+import frc.robot.lib.VisionState;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class AprilTagDetector {
+  private final Lock lock = new ReentrantLock();
+  private final UdpListenerThread<VisionPacket> listener;
+  private AtomicLong latency = new AtomicLong(0);
+
+  private final AprilTagPose[] tags = new AprilTagPose[22]; // 22 april tags locations
+  private VisionPose pose = new VisionPose();
+
+  private static final TimestampedValue<Pose2d> noPose = new TimestampedValue<>(-1, null);
+  private static final TimestampedTranslation2d noTag = new TimestampedTranslation2d(-1, null);
+
+  public AprilTagDetector() {
+    listener =
+        new UdpListenerThread<VisionPacket>(
+            Constants.Network.UDP_PORT_APRILTAG_DETECTOR,
+            1500,
+            this::packetReceived,
+            VisionPacket.struct::unpack);
+
+    // initialize tags
+    for (var i = 0; i < tags.length; ++i) {
+      tags[i] = new AprilTagPose((byte) (i + 1));
+    }
+
+    listener.start();
+  }
+
+  private void packetReceived(VisionPacket packet) {
+    final var t = RobotController.getFPGATime();
+    latency.set(t - packet.timestamp);
+
+    lock.lock();
+    try {
+      // pose can be trusted
+      if ((packet.flags & 0x1) != 0) {
+        pose.timestamp = packet.timestamp;
+        pose.x = Units.inchesToMeters(packet.x);
+        pose.y = Units.inchesToMeters(packet.y);
+        pose.theta = packet.theta;
+        pose.quality = packet.quality;
+      }
+
+      if (packet.count > 0) {
+        for (var i = 0; i < packet.count; ++i) {
+          final var index = packet.tags[i].id - 1;
+          tags[index].timestamp = packet.timestamp;
+          tags[index].x = Units.inchesToMeters(packet.tags[i].x);
+          tags[index].y = Units.inchesToMeters(packet.tags[i].y);
+        }
+      }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /** Returns recent latency in microseconds. */
+  @Logged(name = "Latency", importance = Importance.DEBUG)
+  public long getLatency() {
+    return latency.get();
+  }
+
+  /** Returns snapshot of the vision state. */
+  public VisionState getState() {
+    lock.lock();
+    try {
+      final var estimatedPose =
+          pose.timestamp <= 0
+              ? noPose
+              : new TimestampedValue<>(
+                  pose.timestamp, new Pose2d(pose.x, pose.y, Rotation2d.fromRadians(pose.theta)));
+      final var estimatedTags = new TimestampedTranslation2d[22];
+
+      for (var i = 0; i < estimatedTags.length; ++i) {
+        estimatedTags[i] =
+            tags[i].timestamp <= 0
+                ? noTag
+                : new TimestampedTranslation2d(
+                    tags[i].timestamp, new Translation2d(tags[i].x, tags[i].y));
+      }
+
+      return new VisionState(estimatedPose, estimatedTags);
+    } finally {
+      lock.unlock();
+    }
+  }
+}

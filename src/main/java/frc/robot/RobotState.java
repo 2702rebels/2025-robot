@@ -19,9 +19,11 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.ReefState;
 import frc.robot.lib.TimestampedCircularBuffer;
+import frc.robot.lib.VisionState;
 import java.util.BitSet;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class RobotState {
   private static RobotState instance;
@@ -42,6 +44,9 @@ public class RobotState {
 
   // external supplier of observed historical robot poses
   private Function<Long, Optional<Pose2d>> historicalPoseSupplier;
+
+  // external vision state supplier
+  private Supplier<VisionState> visionStateSupplier;
 
   /*
    * ReefState to use with Reef widgets
@@ -99,10 +104,19 @@ public class RobotState {
     /** Score coral at L2, L3, L4 per reef scoring strategy */
     CORAL_SCORE_AUTO,
 
-    /** Intake algae */
-    ALGAE_INTAKE,
+    /** Score coral at L4 (final motion) */
+    CORAL_SCORE_L4,
 
-    /** Eject algae */
+    /** Intake algae (L2 low) */
+    ALGAE_INTAKE_L2,
+
+    /** Intake algae (L3 high) */
+    ALGAE_INTAKE_L3,
+
+    /** Score algae into the net */
+    ALGAE_SCORE_NET,
+
+    /** Eject algae into the processor */
     ALGAE_EJECT,
   }
 
@@ -147,22 +161,51 @@ public class RobotState {
   @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
   public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.CORAL_SCORE_L1);
 
-  @Logged(name = "ShouldScoreCoralAuto", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralAuto = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO);
+  @Logged(name = "ShouldScoreCoralL23", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL23 = new Trigger(() -> {
+    if (intent == Intent.CORAL_SCORE_AUTO) {
+      final var level = getScoreLevel();
+      return level == 2 || level == 3;
+    }
+    return false;
+  });
 
-  @Logged(name = "ShouldScoreCoral", importance = Importance.INFO)
-  public final Trigger shouldScoreCoral = shouldScoreCoralL1.or(shouldScoreCoralAuto);
+  @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO && getScoreLevel() == 4);
+
+  @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L2);
+
+  @Logged(name = "ShouldIntakeAlgaeL3", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgaeL3 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L3);
 
   @Logged(name = "ShouldIntakeAlgae", importance = Importance.INFO)
-  public final Trigger shouldIntakeAlgae = new Trigger(() -> intent == Intent.ALGAE_INTAKE);
+  public final Trigger shouldIntakeAlgae = shouldIntakeAlgaeL2.or(shouldIntakeAlgaeL3);
 
   @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
   public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.ALGAE_EJECT);
   // spotless:on
 
+  private VisionState visionState;
+
+  @Logged(name = "VisionPose", importance = Importance.INFO)
+  public Pose2d getVisionPose() {
+    return visionState != null && visionState.pose.timestamp() > 0
+        ? visionState.pose.value()
+        : null;
+  }
+
+  /* Target pose to supply to driveToPose command */
+  private Optional<Pose2d> targetPose;
+
   /** Binds external historical pose supplier. */
   public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
     historicalPoseSupplier = value;
+  }
+
+  /** Binds external vision state supplier. */
+  public void setVisionStateSupplier(Supplier<VisionState> value) {
+    visionStateSupplier = value;
   }
 
   /** Gets the score level for automatic scoring (1..4) */
@@ -176,6 +219,18 @@ public class RobotState {
               this.intent = intent;
             })
         .withName("SetIntent");
+  }
+
+  public void setTargetPose(Pose2d pose) {
+    targetPose = Optional.of(pose);
+  }
+
+  public Optional<Pose2d> getTargetPose() {
+    return targetPose;
+  }
+
+  public Optional<VisionState> getVisionState() {
+    return Optional.ofNullable(visionState);
   }
 
   /** Synchronizes operator's input with the robot's perspective. */
@@ -211,6 +266,11 @@ public class RobotState {
    */
   public void enterPeriodic() {
     pollReefState();
+
+    // poll vision state
+    if (visionStateSupplier != null) {
+      visionState = visionStateSupplier.get();
+    }
 
     scoringStrategy = scoringStrategyChooser.getSelected();
 

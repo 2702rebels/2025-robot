@@ -39,7 +39,7 @@ public class Elevator extends SubsystemBase {
   private static final double maxTravel = 66;
 
   // tolerance (inches)
-  private static final double tolerance = 0.5;
+  private static final double tolerance = 1;
 
   @Logged(name = "Setpoint", importance = Importance.INFO)
   private double setpoint;

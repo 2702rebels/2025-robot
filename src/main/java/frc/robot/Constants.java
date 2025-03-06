@@ -18,9 +18,6 @@ public final class Constants {
     /** SysId bindings */
     public static final boolean sysIdBindings = false;
 
-    /** Testing mode */
-    public static final boolean testingMode = true;
-
     /** Driving disabled */
     public static final boolean drivingDisabled = false;
   }
@@ -77,7 +74,7 @@ public final class Constants {
     public static final LinearAcceleration maxAcceleration = maxSpeed.div(Seconds.of(0.5));
 
     /** Maximum angular velocity */
-    public static final AngularVelocity maxAngularRate = RotationsPerSecond.of(1);
+    public static final AngularVelocity maxAngularRate = RotationsPerSecond.of(0.8);
 
     /** Maximum angular acceleration */
     public static final AngularAcceleration maxAngularAcceleration =

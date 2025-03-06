@@ -37,7 +37,7 @@ public final class Manipulator extends SubsystemBase {
             guideCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(30)
+                  .smartCurrentLimit(40)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals
@@ -55,7 +55,7 @@ public final class Manipulator extends SubsystemBase {
             coralCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(30)
+                  .smartCurrentLimit(40)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals

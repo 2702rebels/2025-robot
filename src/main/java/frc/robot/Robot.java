@@ -28,7 +28,7 @@ public class Robot extends TimedRobot {
 
   private final Vision vision;
 
-  private final boolean kUseLimelight = false;
+  private final boolean kUseVision = false;
 
   public Robot() {
     robotState = RobotState.getInstance();
@@ -72,24 +72,21 @@ public class Robot extends TimedRobot {
         robotContainer.drivetrain.getPose(),
         robotContainer.drivetrain.getFieldSpeeds());
 
-    /*
-     * This example of adding Limelight is very simple and may not be sufficient for on-field use.
-     * Users typically need to provide a standard deviation that scales with the distance to target
-     * and changes with number of tags available.
-     *
-     * This example is sufficient to show that vision integration is possible, though exact implementation
-     * of how to use vision should be tuned per-robot and to the team's specification.
-     */
-    if (kUseLimelight) {
-      var driveState = robotContainer.drivetrain.getState();
-      double headingDeg = driveState.Pose.getRotation().getDegrees();
-      double omegaRps = Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
+    if (kUseVision) {
+      final var visionState = robotState.getVisionState();
+      if (visionState.isPresent()) {
+        var driveState = robotContainer.drivetrain.getState();
+        double headingDeg = driveState.Pose.getRotation().getDegrees();
+        double omegaRotationsPerSecond =
+            Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
 
-      LimelightHelpers.SetRobotOrientation("limelight", headingDeg, 0, 0, 0, 0, 0);
-      var llMeasurement = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
-      if (llMeasurement != null && llMeasurement.tagCount > 0 && omegaRps < 2.0) {
-        robotContainer.drivetrain.addVisionMeasurement(
-            llMeasurement.pose, Utils.fpgaToCurrentTime(llMeasurement.timestampSeconds));
+        final var visionPose = visionState.get().pose;
+        final var visionPoseTimestamp = visionPose.timestamp();
+
+        if (visionPoseTimestamp > 0 && omegaRotationsPerSecond < 1) {
+          robotContainer.drivetrain.addVisionMeasurement(
+              visionPose.value(), Utils.fpgaToCurrentTime(visionPoseTimestamp / 1000000.0));
+        }
       }
     }
   }

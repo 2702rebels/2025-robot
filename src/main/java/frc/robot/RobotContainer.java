@@ -14,6 +14,10 @@ import dev.doglog.DogLog;
 import dev.doglog.DogLogOptions;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -21,13 +25,16 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.RobotState.Intent;
+import frc.robot.commands.DriveToPose;
 import frc.robot.generated.TunerConstants;
 import frc.robot.lib.Tunable;
+import frc.robot.subsystems.AprilTagDetector;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.Manipulator;
@@ -49,10 +56,6 @@ public class RobotContainer {
           .withRotationalDeadband(maxAngularRateRadiansPerSecond * 0.05) // add a 5% deadband
           .withDriveRequestType(
               DriveRequestType.OpenLoopVoltage); // use open-loop control for drive motors
-
-  private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
-  private final SwerveRequest.RobotCentric forwardStraight =
-      new SwerveRequest.RobotCentric().withDriveRequestType(DriveRequestType.OpenLoopVoltage);
 
   private final RobotState state;
 
@@ -81,6 +84,9 @@ public class RobotContainer {
   @Logged(name = "ObjectDetector", importance = Importance.INFO)
   private final ObjectDetector objectDetector = new ObjectDetector();
 
+  @Logged(name = "AprilTagDetector", importance = Importance.INFO)
+  private final AprilTagDetector aprilTagDetector = new AprilTagDetector();
+
   // startup validation checklist
   @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
   private boolean pivotEncoderValid = false;
@@ -95,6 +101,9 @@ public class RobotContainer {
 
     // bind internal drivetrain buffer of historical poses
     state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
+
+    // bind vision state supplier
+    state.setVisionStateSupplier(aprilTagDetector::getState);
 
     // configure DogLog logging
     if (Constants.Settings.loggingEnabled) {
@@ -113,167 +122,53 @@ public class RobotContainer {
     autoFactory = drivetrain.createAutoFactory();
     autoRoutines = new AutoRoutines(autoFactory);
 
-    autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
+    // autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
+    autoChooser.addRoutine(
+        "DriveForward", () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24))));
+
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
-    if (Constants.Settings.testingMode) {
-      configureTesting();
-    } else {
-      configureBindings();
-      configureTriggers();
-    }
+    configureTriggers();
+    configureDriverBindings();
+  }
 
+  /** Smooth out control input by squaring. */
+  private double smoothInput(double value) {
+    final var v = MathUtil.clamp(value, -1, 1);
+    return Math.signum(value) * v * v;
+  }
+
+  /** Use this method to configure driver controller bindings. */
+  private void configureDriverBindings() {
     if (!Constants.Settings.drivingDisabled) {
-      configureDriveBindings();
+      // note that X is defined as forward according to WPILib convention,
+      // and Y is defined as to the left according to WPILib convention.
+      drivetrain.setDefaultCommand(
+          // drivetrain will execute this command periodically
+          drivetrain.applyRequest(
+              () ->
+                  drive
+                      // drive forward with negative Y (forward)
+                      .withVelocityX(
+                          -smoothInput(controllerDriver.getLeftY()) * maxSpeedMetersPerSecond)
+                      // drive left with negative X (left)
+                      .withVelocityY(
+                          -smoothInput(controllerDriver.getLeftX()) * maxSpeedMetersPerSecond)
+                      // drive counterclockwise with negative X (left)
+                      .withRotationalRate(
+                          -smoothInput(controllerDriver.getRightX())
+                              * maxAngularRateRadiansPerSecond)));
     }
-  }
 
-  /** Use this method to configure bindings and triggers for testing mode. */
-  private void configureTesting() {
-    // reset the intent
-    controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
+    // reset the field-centric heading
+    controllerDriver.start().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
 
-    controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
-    controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_AUTO));
-    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
-    controllerDriver.b().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-
-    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE));
-    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_EJECT));
-
-    // controllerDriver.povUp().onTrue(new InstantCommand(() -> pivot.setAngle(90), pivot));
-    // controllerDriver.povDown().onTrue(new InstantCommand(() -> pivot.setAngle(10), pivot));
-
-    // controllerDriver.povUp().onTrue(new InstantCommand(() -> elevator.setPosition(12),
-    // elevator));
-    // controllerDriver.povDown().onTrue(new InstantCommand(() -> elevator.setPosition(0),
-    // elevator));
-
-    // controllerDriver.povLeft().onTrue(new InstantCommand(() -> pivot.setAngle(0), pivot));
-    // controllerDriver.povRight().onTrue(new InstantCommand(() -> pivot.setAngle(80), pivot));
-
-    // controllerDriver.y().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-    // controllerDriver.povUp().onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
-
-    // controllerDriver.a().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-    // controllerDriver.b().onTrue(new InstantCommand(elevator::reset));
-
-    // state.shouldScoreCoralL1.whileTrue(superstructure.setPosition(Position.L1));
-    // state.shouldIntakeCoralFloor.whileTrue(superstructure.setPosition(Position.STOWED));
-
-    // controllerDriver.rightBumper().onTrue(state.setIntent(Intent.CORAL_EJECT));
-
-    // intake algae
-    state.shouldIntakeAlgae.whileTrue(manipulator.intakeAlgae());
-
-    // eject algae
-    state.shouldEjectAlgae.whileTrue(manipulator.ejectAlgae());
-
-    // intake coral from the floor
-    state
-        .shouldIntakeCoralFloor
-        .and(superstructure.hasCoral.negate())
-        .onTrue(superstructure.setPosition(Position.FLOOR));
-
-    state
-        .shouldIntakeCoralFloor
-        .and(superstructure.hasCoral.negate())
-        .and(superstructure.canFloorIntake)
-        .whileTrue(manipulator.intakeCoral());
-
-    // reset intent once coral has been acquired
-    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.NONE));
-
-    state.shouldEjectCoral.and(superstructure.hasCoral).whileTrue(manipulator.ejectCoral());
-
-    state
-        .shouldEjectCoral
-        .and(superstructure.hasCoral.negate())
-        .onTrue(state.setIntent(Intent.NONE));
-
-    // brake to prevent robot backing when operating elevator/pivot
-    state.shouldScoreCoral.and(state.shouldScoreCoralL1.negate()).whileTrue(drivetrain.brake());
-
-    // score coral at L1
-    state
-        .shouldScoreCoralL1
-        .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(Position.L1));
-
-    state
-        .shouldScoreCoralAuto
-        .and(superstructure.hasCoral)
-        .onTrue(superstructure.setAutoScoringPosition());
-
-    // state
-    //     .shouldScoreCoralAuto
-    //     .and(superstructure.hasCoral)
-    //     .and(superstructure.targetsL4.negate())
-    //     .and(superstructure.canScoreAuto)
-    //     .whileTrue(manipulator.ejectCoral());
-
-    // state
-    //     .shouldScoreCoralL1
-    //     .and(superstructure.hasCoral)
-    //     .and(superstructure.canScoreL1)
-    //     .whileTrue(manipulator.ejectCoral());
-
-    // [default behavior] stow when no intent is specified
-    state.idle.whileTrue(superstructure.setPosition(Position.STOWED));
-  }
-
-  /** Use this method to configure controller bindings. */
-  private void configureBindings() {}
-
-  /** Use this method to configure controller bindings related to driving. */
-  private void configureDriveBindings() {
-    // note that X is defined as forward according to WPILib convention,
-    // and Y is defined as to the left according to WPILib convention.
-    drivetrain.setDefaultCommand(
-        // drivetrain will execute this command periodically
-        drivetrain.applyRequest(
-            () ->
-                drive
-                    // drive forward with negative Y (forward)
-                    .withVelocityX(-controllerDriver.getLeftY() * maxSpeedMetersPerSecond)
-                    // drive left with negative X (left)
-                    .withVelocityY(-controllerDriver.getLeftX() * maxSpeedMetersPerSecond)
-                    // drive counterclockwise with negative X (left)
-                    .withRotationalRate(
-                        controllerDriver.getRightX() * maxAngularRateRadiansPerSecond)));
-
-    // reset the field-centric heading on left bumper press
-    controllerDriver.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
-
-    // set brake position (X) when holding A
+    // set brake position (X)
     controllerDriver.a().whileTrue(drivetrain.brake());
-
-    // controllerDriver
-    //     .b()
-    //     .whileTrue(
-    //         drivetrain.applyRequest(
-    //             () ->
-    //                 point.withModuleDirection(
-    //                     new Rotation2d(
-    //                         -controllerDriver.getLeftX(), -controllerDriver.getLeftY()))));
 
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
     if (Constants.Settings.sysIdBindings) {
-      controllerDriver
-          .povUp()
-          .whileTrue(
-              drivetrain.applyRequest(() -> forwardStraight.withVelocityX(0.5).withVelocityY(0)));
-
-      controllerDriver
-          .povDown()
-          .whileTrue(
-              drivetrain.applyRequest(() -> forwardStraight.withVelocityX(-0.5).withVelocityY(0)));
-
-      // controllerDriver.leftBumper().whileTrue(new WheelDiameterCharacterization(drivetrain, 1));
-      // controllerDriver.rightBumper().whileTrue(new WheelDiameterCharacterization(drivetrain,
-      // -1));
-
       controllerDriver
           .back()
           .and(controllerDriver.y())
@@ -293,24 +188,77 @@ public class RobotContainer {
     }
 
     drivetrain.registerTelemetry(logger::update);
+
+    controllerDriver.x().onTrue(state.setIntent(Intent.NONE));
+
+    controllerDriver.leftTrigger().onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
+    controllerDriver.leftBumper().onTrue(state.setIntent(Intent.CORAL_STATION_INTAKE));
+
+    // coral scoring
+    controllerDriver
+        .rightTrigger()
+        .and(superstructure.hasCoral)
+        .onTrue(state.setIntent(Intent.CORAL_SCORE_AUTO));
+
+    controllerDriver
+        .rightBumper()
+        .and(superstructure.hasCoral)
+        .onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
+
+    // algae scoring
+    controllerDriver
+        .rightTrigger()
+        .and(superstructure.hasAlgae)
+        .onTrue(state.setIntent(Intent.ALGAE_SCORE_NET));
+
+    controllerDriver
+        .rightBumper()
+        .and(superstructure.hasAlgae)
+        .onTrue(state.setIntent(Intent.ALGAE_EJECT));
+
+    controllerDriver.povUpLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    controllerDriver.povUpRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+
+    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
   }
 
   /** Use this method to configure trigger bindings. */
   private void configureTriggers() {
     // intent-driven triggers
 
-    // eject coral
-    state
-        .shouldEjectCoral
-        .and(superstructure.hasCoral)
-        .and(superstructure.canEject)
-        .whileTrue(manipulator.ejectCoral());
+    // eject coral (emergency mechanism does not check for coral presence)
+    state.shouldEjectCoral.and(superstructure.canEject).whileTrue(manipulator.ejectCoral());
+    state.shouldEjectCoral.onTrue(superstructure.setPosition(Position.L1));
 
-    // reset intent once coral has been ejected
+    // intake algae
     state
-        .shouldEjectCoral
-        .and(superstructure.hasCoral.negate())
-        .onTrue(state.setIntent(Intent.NONE));
+        .shouldIntakeAlgae
+        .and(superstructure.hasAlgae.negate())
+        .and(superstructure.canAlgaeIntake)
+        .whileTrue(manipulator.intakeAlgae());
+
+    state
+        .shouldIntakeAlgaeL2
+        .and(superstructure.hasAlgae.negate())
+        .onTrue(superstructure.setPosition(Position.L2_ALGAE));
+
+    state
+        .shouldIntakeAlgaeL3
+        .and(superstructure.hasAlgae.negate())
+        .onTrue(superstructure.setPosition(Position.L3_ALGAE));
+
+    // reset intent once algae has been acquired
+    state.shouldIntakeAlgae.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.NONE));
+
+    // eject algae
+    // DOES NOT currently use intent since we don't have reliable presence mechanism
+    // for algae, instead run this command while input is commanded and always reset
+    // algae presence at the end
+    controllerDriver
+        .povRight()
+        .whileTrue(
+            manipulator.ejectAlgae().finallyDo(() -> superstructure.setAlgaePresence(false)));
 
     // intake coral from the floor
     state
@@ -339,6 +287,9 @@ public class RobotContainer {
     // reset intent once coral has been acquired
     state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.NONE));
 
+    // rumble once the coral has been acquired
+    superstructure.hasCoral.onTrue(rumble(Milliseconds.of(300)));
+
     // score coral at L1
     state
         .shouldScoreCoralL1
@@ -352,28 +303,41 @@ public class RobotContainer {
         .whileTrue(manipulator.ejectCoral());
 
     // score coral via auto target
+    // brake to prevent robot backing when operating elevator/pivot
+    // for scoring at L2 or higher, but only until we reach the position
     state
-        .shouldScoreCoralAuto
+        .shouldScoreCoralL23
+        .or(state.shouldScoreCoralL4)
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setAutoScoringPosition());
+        .onTrue(superstructure.setAutoScoringPosition())
+        .onTrue(drivetrain.brake().until(superstructure.canScoreAuto));
 
+    // scoring L2, L3
     state
-        .shouldScoreCoralAuto
+        .shouldScoreCoralL23
         .and(superstructure.hasCoral)
-        .and(superstructure.targetsL4.negate())
         .and(superstructure.canScoreAuto)
         .whileTrue(manipulator.ejectCoral());
 
+    // scoring L4
     state
-        .shouldScoreCoralAuto
+        .shouldScoreCoralL4
         .and(superstructure.hasCoral)
-        .and(superstructure.targetsL4)
         .and(superstructure.canScoreL4)
-        .onTrue(superstructure.setPosition(Position.L4_SCORED));
+        .onTrue(
+            driveForward(Inches.of(12))
+                .andThen(state.setIntent(Intent.CORAL_SCORE_L4))
+                .andThen(
+                    superstructure
+                        .maintainPosition(Position.L4_SCORED)
+                        .until(superstructure::isDoneScoringL4))
+                .andThen(driveForward(Inches.of(-10)))
+                .andThen(state.setIntent(Intent.NONE)));
 
     // reset intent once coral has been scored
     state
-        .shouldScoreCoral
+        .shouldScoreCoralL1
+        .or(state.shouldScoreCoralL23)
         .and(superstructure.hasCoral.negate())
         .onTrue(state.setIntent(Intent.NONE));
 
@@ -400,6 +364,23 @@ public class RobotContainer {
                 rumble(Milliseconds.of(200)),
                 Commands.waitTime(Milliseconds.of(100)),
                 rumble(Milliseconds.of(200))));
+  }
+
+  /** Commands drive forward fixed distance. */
+  private Command driveForward(Distance distance) {
+    return new InstantCommand(
+            () -> {
+              final var pose = drivetrain.getPose();
+              final var state = RobotState.getInstance();
+              state.setTargetPose(
+                  new Pose2d(
+                      pose.getTranslation()
+                          .plus(
+                              new Translation2d(distance.in(Meters), 0)
+                                  .rotateBy(pose.getRotation())),
+                      pose.getRotation()));
+            })
+        .andThen(new DriveToPose(drivetrain, state::getTargetPose));
   }
 
   public Command getAutonomousCommand() {

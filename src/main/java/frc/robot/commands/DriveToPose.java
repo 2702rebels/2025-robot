@@ -15,6 +15,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -22,7 +23,7 @@ public class DriveToPose extends Command {
   private final double minDistance = 0.2;
   private final double maxDistance = 0.8;
 
-  protected Supplier<Pose2d> poseSupplier;
+  protected Supplier<Optional<Pose2d>> poseSupplier;
   private final BooleanSupplier stopCondition;
   private final CommandSwerveDrivetrain drive;
   private boolean running;
@@ -52,11 +53,17 @@ public class DriveToPose extends Command {
   private double rotationErrorAbs;
 
   public DriveToPose(CommandSwerveDrivetrain drive, Pose2d pose) {
-    this(drive, () -> pose, null);
+    this(drive, () -> Optional.of(pose), null);
+  }
+
+  public DriveToPose(CommandSwerveDrivetrain drive, Supplier<Optional<Pose2d>> poseSupplier) {
+    this(drive, poseSupplier, null);
   }
 
   public DriveToPose(
-      CommandSwerveDrivetrain drive, Supplier<Pose2d> poseSupplier, BooleanSupplier stopCondition) {
+      CommandSwerveDrivetrain drive,
+      Supplier<Optional<Pose2d>> poseSupplier,
+      BooleanSupplier stopCondition) {
     this.drive = drive;
     this.poseSupplier = poseSupplier;
     this.stopCondition = stopCondition;
@@ -69,9 +76,14 @@ public class DriveToPose extends Command {
 
   @Override
   public void initialize() {
+    final var pose = poseSupplier.get();
+    if (!pose.isPresent()) {
+      return;
+    }
+
     final var currentFieldVelocity = drive.getFieldSpeeds();
     final var currentPose = drive.getPose();
-    final var desiredPose = poseSupplier.get();
+    final var desiredPose = pose.get();
 
     final var currentTranslation = currentPose.getTranslation();
     final var desiredTranslation = desiredPose.getTranslation();
@@ -97,10 +109,15 @@ public class DriveToPose extends Command {
 
   @Override
   public void execute() {
+    final var pose = poseSupplier.get();
+    if (!pose.isPresent()) {
+      return;
+    }
+
     running = true;
 
     final var currentPose = drive.getPose();
-    final var desiredPose = poseSupplier.get();
+    final var desiredPose = pose.get();
 
     final var currentTranslation = currentPose.getTranslation();
     final var desiredTranslation = desiredPose.getTranslation();
@@ -175,7 +192,9 @@ public class DriveToPose extends Command {
 
   @Override
   public boolean isFinished() {
-    return atGoal() || (stopCondition != null && stopCondition.getAsBoolean());
+    return !poseSupplier.get().isPresent()
+        || atGoal()
+        || (stopCondition != null && stopCondition.getAsBoolean());
   }
 
   public boolean atGoal() {
