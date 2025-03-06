@@ -89,6 +89,9 @@ public class RobotState {
   public static enum Intent {
     NONE,
 
+    /** Hover intake to allow trapped game pieces to escape */
+    HOVER,
+
     /** Intake coral form the floor */
     CORAL_FLOOR_INTAKE,
 
@@ -145,6 +148,9 @@ public class RobotState {
   // spotless:off
   @Logged(name = "Idle", importance = Importance.INFO)
   public final Trigger idle = new Trigger(() -> intent == Intent.NONE);
+
+  @Logged(name = "ShouldHover", importance = Importance.INFO)
+  public final Trigger shouldHover = new Trigger(() -> intent == Intent.HOVER);
 
   @Logged(name = "ShouldIntakeCoralFloor", importance = Importance.INFO)
   public final Trigger shouldIntakeCoralFloor = new Trigger(() -> intent == Intent.CORAL_FLOOR_INTAKE);

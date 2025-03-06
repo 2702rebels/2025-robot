@@ -177,6 +177,14 @@ public class Elevator extends SubsystemBase {
     return MathUtil.isNear(value, getPosition(), tolerance);
   }
 
+  public boolean isAbovePosition(double value) {
+    return getPosition() >= value;
+  }
+
+  public boolean isBelowPosition(double value) {
+    return getPosition() <= value;
+  }
+
   @Logged(name = "Position", importance = Importance.INFO)
   public double getPosition() {
     return getLeaderPosition();

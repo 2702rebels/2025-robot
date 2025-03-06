@@ -12,6 +12,7 @@ import frc.robot.RobotState;
 import frc.robot.lib.Tunable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Combines elevator and pivot since we want a coupled control of both during motion to the desired
@@ -31,7 +32,8 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kL4SHeight = 46;
   private static final double __kL2AlgaeHeight = 0;
   private static final double __kL3AlgaeHeight = 0;
-  private static final double __kNetAlgaeHeight = 66;
+  private static final double __kNetHeight = 66;
+  private static final double __kHoverHeight = 10;
 
   // angles are in degrees [!]
   private static final double __kStowedAngle = 130;
@@ -71,6 +73,9 @@ public final class Superstructure extends SubsystemBase {
   private final Pivot pivot;
 
   private final SparkLimitSwitch coralSensor;
+
+  // allows overriding elevator height for emergency procedures
+  private Optional<Double> overrideElevatorHeight = Optional.empty();
 
   // since we don't currently have a sensor (limit switch) to detect the presence
   // of the algae, we instead rely on current sensing and setting this state manually
@@ -156,6 +161,8 @@ public final class Superstructure extends SubsystemBase {
     L4_SCORED,
     L2_ALGAE,
     L3_ALGAE,
+    NET,
+    HOVER, // special position to allow trapped game pieces to escape
   }
 
   /** Trigger for coral presence. */
@@ -221,6 +228,22 @@ public final class Superstructure extends SubsystemBase {
         .withName("MaintainPosition");
   }
 
+  public Command setHeightOverride(double value) {
+    return runOnce(
+            () -> {
+              this.overrideElevatorHeight = Optional.of(value);
+            })
+        .withName("SetHeightOverride");
+  }
+
+  public Command resetHeightOverride() {
+    return runOnce(
+            () -> {
+              this.overrideElevatorHeight = Optional.empty();
+            })
+        .withName("ResetHeightOverride");
+  }
+
   public Command setAutoScoringPosition() {
     return runOnce(
             () -> {
@@ -250,8 +273,9 @@ public final class Superstructure extends SubsystemBase {
   public void periodic() {
     final var setpoint = getSetpoint();
 
-    elevator.setPosition(setpoint.getFirst());
     pivot.setAngle(setpoint.getSecond());
+    elevator.setPosition(
+        overrideElevatorHeight.isPresent() ? overrideElevatorHeight.get() : setpoint.getFirst());
   }
 
   /* Manually sets algae presence indicator. */
@@ -324,6 +348,8 @@ public final class Superstructure extends SubsystemBase {
     positionProfiles.put(Position.L4_SCORED, Pair.of(kL4SHeight.get(), kL4SAngle.get()));
     positionProfiles.put(Position.L2_ALGAE, Pair.of(kL2AlgaeHeight.get(), kL2AlgaeAngle.get()));
     positionProfiles.put(Position.L3_ALGAE, Pair.of(kL3AlgaeHeight.get(), kL3AlgaeAngle.get()));
+    positionProfiles.put(Position.HOVER, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
+    positionProfiles.put(Position.NET, Pair.of(kNetHeight.get(), kTransitionAlgaeAngle.get()));
     // spotless:on
   }
 
@@ -353,9 +379,10 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kL2AlgaeHeight = profileValue("L2Algae/Height", __kL2AlgaeHeight);
   private static Tunable.DoubleValue kL3AlgaeAngle = profileValue("L3Algae/Angle", __kL3AlgaeAngle);
   private static Tunable.DoubleValue kL3AlgaeHeight = profileValue("L3Algae/Height", __kL3AlgaeHeight);
-  private static Tunable.DoubleValue kNetAlgaeHeight = profileValue("NetAlgae/Height", __kNetAlgaeHeight);
   private static Tunable.DoubleValue kBranchMargin = profileValue("BranchMargin", __kBranchMargin);
   private static Tunable.DoubleValue kBranchOffset = profileValue("BranchOffset", __kBranchOffset);
+  private static Tunable.DoubleValue kNetHeight = profileValue("NetHeight", __kNetHeight);
+  private static Tunable.DoubleValue kHoverHeight = profileValue("HoverHeight", __kHoverHeight);
   private static Tunable.DoubleValue kTransitionAngle = profileValue("TransitionAngle", __kTransitionAngle);
   private static Tunable.DoubleValue kTransitionAlgaeAngle = profileValue("TransitionAlgaeAngle", __kTransitionAlgaeAngle);
   private static Tunable.DoubleValue kStowedAlgaeAngle = profileValue("StowedAlgaeAngle", __kStowedAlgaeAngle);

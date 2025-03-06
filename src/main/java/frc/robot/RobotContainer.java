@@ -49,11 +49,13 @@ public class RobotContainer {
   private static final double maxAngularRateRadiansPerSecond =
       DriveConstants.maxAngularRate.in(RadiansPerSecond);
 
+  private static double kControllerDeadband = 0; // e.g. 0.05 for 5%
+
   // setting up bindings for necessary control of the swerve drive platform
   private final SwerveRequest.FieldCentric drive =
       new SwerveRequest.FieldCentric()
-          .withDeadband(maxSpeedMetersPerSecond * 0.05)
-          .withRotationalDeadband(maxAngularRateRadiansPerSecond * 0.05) // add a 5% deadband
+          .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
+          .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
           .withDriveRequestType(
               DriveRequestType.OpenLoopVoltage); // use open-loop control for drive motors
 
@@ -95,6 +97,9 @@ public class RobotContainer {
   private final AutoFactory autoFactory;
   private final AutoRoutines autoRoutines;
   private final AutoChooser autoChooser = new AutoChooser();
+
+  // slows down max rotation speed for more precise movements
+  private final Trigger precisionRotation = controllerDriver.rightStick();
 
   public RobotContainer(RobotState state) {
     this.state = state;
@@ -157,7 +162,8 @@ public class RobotContainer {
                       // drive counterclockwise with negative X (left)
                       .withRotationalRate(
                           -smoothInput(controllerDriver.getRightX())
-                              * maxAngularRateRadiansPerSecond)));
+                              * maxAngularRateRadiansPerSecond
+                              * (precisionRotation.getAsBoolean() ? preciseRotation.get() : 1))));
     }
 
     // reset the field-centric heading
@@ -221,6 +227,12 @@ public class RobotContainer {
 
     controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
     controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
+
+    controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
+    controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+
+    // controllerDriver.povLeft().whileTrue(new WheelDiameterCharacterization(drivetrain, 1));
+    // controllerDriver.povRight().whileTrue(new WheelDiameterCharacterization(drivetrain, -1));
   }
 
   /** Use this method to configure trigger bindings. */
@@ -326,6 +338,7 @@ public class RobotContainer {
         .and(superstructure.canScoreL4)
         .onTrue(
             driveForward(Inches.of(12))
+                .withTimeout(0.8)
                 .andThen(state.setIntent(Intent.CORAL_SCORE_L4))
                 .andThen(
                     superstructure
@@ -341,8 +354,23 @@ public class RobotContainer {
         .and(superstructure.hasCoral.negate())
         .onTrue(state.setIntent(Intent.NONE));
 
+    // hover
+    state.shouldHover.onTrue(superstructure.setPosition(Position.HOVER));
+
     // [default behavior] stow when no intent is specified
-    state.idle.whileTrue(superstructure.setPosition(Position.STOWED));
+    //
+    // special handling for situations when elevator is above 54", e.g.
+    // when we are stuck on the reef while trying to score L4 and are trying
+    // to abort -- first go up, then back up, before stowing the pivot
+    state.idle.whileTrue(
+        Commands.either(
+            Commands.sequence(
+                superstructure.setHeightOverride(60),
+                driveForward(Inches.of(-10)),
+                superstructure.resetHeightOverride(),
+                superstructure.setPosition(Position.STOWED)),
+            superstructure.setPosition(Position.STOWED),
+            () -> elevator.isAbovePosition(52)));
 
     // endgame alerts
     new Trigger(
@@ -413,5 +441,6 @@ public class RobotContainer {
   // spotless:off
   private static final Tunable.DoubleValue endgameAlert1 = Tunable.value("Endgame/Alert1", 30.0);
   private static final Tunable.DoubleValue endgameAlert2 = Tunable.value("Endgame/Alert2", 10.0);
+  private static final Tunable.DoubleValue preciseRotation = Tunable.value("Control/PreciseRotation", 0.2);
   // spotless:on
 }
