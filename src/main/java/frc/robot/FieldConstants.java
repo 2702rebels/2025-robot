@@ -10,7 +10,7 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 /**
  * Field-related constants. Blue alliance origin.
@@ -93,9 +93,12 @@ public final class FieldConstants {
         new Pose2d(Units.inchesToMeters(235.73), 0, Rotation2d.fromDegrees(90));
   }
 
-  /** Returns the pose specified in the blue alliance origin corrected to the current alliance. */
-  public static Supplier<Pose2d> getFieldPose(Pose2d pose) {
-    return () -> {
+  /**
+   * Returns the supplier of pose specified in the blue alliance origin corrected to the current
+   * alliance.
+   */
+  public static Function<Pose2d, Pose2d> createFieldPoseSupplier() {
+    return (Pose2d pose) -> {
       final var flipped =
           DriverStation.getAlliance().isPresent()
               && DriverStation.getAlliance().get() == Alliance.Red;
@@ -103,4 +106,6 @@ public final class FieldConstants {
       return flipped ? ChoreoAllianceFlipUtil.flip(pose) : pose;
     };
   }
+
+  public static Function<Pose2d, Pose2d> fieldPose = createFieldPoseSupplier();
 }

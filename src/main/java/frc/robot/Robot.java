@@ -9,6 +9,7 @@ import edu.wpi.first.epilogue.Epilogue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Strategy;
 import edu.wpi.first.epilogue.logging.errors.ErrorHandler;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -28,12 +29,23 @@ public class Robot extends TimedRobot {
 
   private final Vision vision;
 
-  private final boolean kUseVision = false;
+  private final double kVisionCutoff = 60 * 1000; // (60ms) in microseconds
+  private final double kVisionLinearTolerance = Units.feetToMeters(4);
+  private final double kVisionRotationTolerance = Units.degreesToRadians(90);
+
+  private final boolean kUseVision = true;
+
+  // accept first vision update as ground truth
+  private boolean visionSynced = false;
 
   public Robot() {
     robotState = RobotState.getInstance();
     vision = Vision.getInstance();
     robotContainer = new RobotContainer(robotState);
+
+    robotContainer.drivetrain.setVisionMeasurementStdDevs(
+        VecBuilder.fill(
+            Units.inchesToMeters(4), Units.inchesToMeters(4), Units.degreesToRadians(60)));
 
     // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
     Epilogue.configure(
@@ -73,22 +85,59 @@ public class Robot extends TimedRobot {
         robotContainer.drivetrain.getFieldSpeeds());
 
     if (kUseVision) {
-      final var visionState = robotState.getVisionState();
-      if (visionState.isPresent()) {
-        var driveState = robotContainer.drivetrain.getState();
-        double headingDeg = driveState.Pose.getRotation().getDegrees();
-        double omegaRotationsPerSecond =
-            Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
-
-        final var visionPose = visionState.get().pose;
-        final var visionPoseTimestamp = visionPose.timestamp();
-
-        if (visionPoseTimestamp > 0 && omegaRotationsPerSecond < 1) {
-          robotContainer.drivetrain.addVisionMeasurement(
-              visionPose.value(), Utils.fpgaToCurrentTime(visionPoseTimestamp / 1000000.0));
-        }
-      }
+      visionPeriodic();
     }
+  }
+
+  private void visionPeriodic() {
+    final var visionState = robotState.getVisionState();
+    if (visionState.isEmpty()) {
+      return;
+    }
+
+    final var visionPoseValue = visionState.get().pose;
+    final var visionPoseTimestamp = visionPoseValue.timestamp();
+    final var visionPose = visionPoseValue.value();
+
+    // invalid pose
+    if (visionPoseTimestamp <= 0) {
+      return;
+    }
+
+    // pose too old
+    if (RobotController.getFPGATime() - visionPoseTimestamp > kVisionCutoff) {
+      return;
+    }
+
+    final var driveState = robotContainer.drivetrain.getState();
+    final double omegaRotationsPerSecond =
+        Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
+
+    // rotating too fast
+    if (omegaRotationsPerSecond > 1) {
+      return;
+    }
+
+    if (visionSynced) {
+      // no historical pose
+      final var robotPoseAtTimestamp = robotState.getPoseAt(visionPoseTimestamp);
+      if (robotPoseAtTimestamp.isEmpty()) {
+        return;
+      }
+
+      final var twist = visionPose.log(robotPoseAtTimestamp.get());
+      if (Math.abs(twist.dx) > kVisionLinearTolerance
+          || Math.abs(twist.dy) > kVisionLinearTolerance
+          || Math.abs(twist.dtheta) > kVisionRotationTolerance) {
+        return;
+      }
+    } else {
+      visionSynced = true;
+      robotContainer.drivetrain.resetPose(visionPose);
+    }
+
+    robotContainer.drivetrain.addVisionMeasurement(
+        visionPose, Utils.fpgaToCurrentTime(visionPoseTimestamp / 1000000.0));
   }
 
   @Override

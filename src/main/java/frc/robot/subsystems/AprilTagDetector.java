@@ -89,8 +89,8 @@ public class AprilTagDetector {
               ? noPose
               : new TimestampedValue<>(
                   pose.timestamp, new Pose2d(pose.x, pose.y, Rotation2d.fromRadians(pose.theta)));
-      final var estimatedTags = new TimestampedTranslation2d[22];
 
+      final var estimatedTags = new TimestampedTranslation2d[22];
       for (var i = 0; i < estimatedTags.length; ++i) {
         estimatedTags[i] =
             tags[i].timestamp <= 0

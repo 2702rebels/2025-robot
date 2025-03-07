@@ -99,7 +99,10 @@ public class RobotContainer {
   private final AutoChooser autoChooser = new AutoChooser();
 
   // slows down max rotation speed for more precise movements
-  private final Trigger precisionRotation = controllerDriver.rightStick();
+  private final Trigger precisionRotation = controllerDriver.leftStick();
+
+  private final Trigger toggleAlgaeButton = controllerDriver.a();
+  private final Trigger ejectAlgaeButton = controllerDriver.y();
 
   public RobotContainer(RobotState state) {
     this.state = state;
@@ -129,7 +132,10 @@ public class RobotContainer {
 
     // autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
     autoChooser.addRoutine(
-        "DriveForward", () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24))));
+        "DriveForward",
+        () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
+
+    autoChooser.addRoutine("Score L4 (HG)", autoRoutines::scoreL4_HG);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
@@ -170,7 +176,7 @@ public class RobotContainer {
     controllerDriver.start().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
 
     // set brake position (X)
-    controllerDriver.a().whileTrue(drivetrain.brake());
+    controllerDriver.b().whileTrue(drivetrain.brake());
 
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
@@ -222,14 +228,20 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(state.setIntent(Intent.ALGAE_EJECT));
 
-    controllerDriver.povUpLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    controllerDriver.povUpRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
 
     controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
     controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
 
     controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
     controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+
+    // bind A to manually toggle algae presence
+    // temporary fix until we have limit switch mechanism in place
+    toggleAlgaeButton.onTrue(
+        new InstantCommand(
+            () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
     // controllerDriver.povLeft().whileTrue(new WheelDiameterCharacterization(drivetrain, 1));
     // controllerDriver.povRight().whileTrue(new WheelDiameterCharacterization(drivetrain, -1));
@@ -260,17 +272,36 @@ public class RobotContainer {
         .and(superstructure.hasAlgae.negate())
         .onTrue(superstructure.setPosition(Position.L3_ALGAE));
 
-    // reset intent once algae has been acquired
-    state.shouldIntakeAlgae.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.NONE));
+    // hold algae while presence is set unless ejecting
+    superstructure
+        .hasAlgae
+        .and(state.shouldEjectAlgae.negate())
+        .and(superstructure.canEjectAlgae.negate().or(superstructure.canScoreAlgae.negate()))
+        .whileTrue(manipulator.holdAlgae());
 
     // eject algae
-    // DOES NOT currently use intent since we don't have reliable presence mechanism
-    // for algae, instead run this command while input is commanded and always reset
-    // algae presence at the end
-    controllerDriver
-        .povRight()
-        .whileTrue(
-            manipulator.ejectAlgae().finallyDo(() -> superstructure.setAlgaePresence(false)));
+    state
+        .shouldEjectAlgae
+        .and(superstructure.hasAlgae)
+        .onTrue(superstructure.setPosition(Position.EJECT_ALGAE));
+
+    state
+        .shouldEjectAlgae
+        .and(superstructure.hasAlgae)
+        .and(superstructure.canEjectAlgae)
+        .onTrue(ejectAlgaeSequence());
+
+    // score algae (net)
+    state
+        .shouldScoreAlgaeNet
+        .and(superstructure.hasAlgae)
+        .onTrue(superstructure.setPosition(Position.NET));
+
+    state
+        .shouldScoreAlgaeNet
+        .and(superstructure.hasAlgae)
+        .and(superstructure.canScoreAlgae)
+        .onTrue(ejectAlgaeSequence());
 
     // intake coral from the floor
     state
@@ -315,12 +346,15 @@ public class RobotContainer {
         .whileTrue(manipulator.ejectCoral());
 
     // score coral via auto target
+    state.hasScoringPose.onTrue(new DriveToPose(drivetrain, () -> state.getScoringPose()));
+
     // brake to prevent robot backing when operating elevator/pivot
     // for scoring at L2 or higher, but only until we reach the position
     state
         .shouldScoreCoralL23
         .or(state.shouldScoreCoralL4)
         .and(superstructure.hasCoral)
+        .and(state.scoringReady)
         .onTrue(superstructure.setAutoScoringPosition())
         .onTrue(drivetrain.brake().until(superstructure.canScoreAuto));
 
@@ -337,15 +371,18 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL4)
         .onTrue(
-            driveForward(Inches.of(12))
-                .withTimeout(0.8)
-                .andThen(state.setIntent(Intent.CORAL_SCORE_L4))
+            state
+                .resetScoringPose()
                 .andThen(
-                    superstructure
-                        .maintainPosition(Position.L4_SCORED)
-                        .until(superstructure::isDoneScoringL4))
-                .andThen(driveForward(Inches.of(-10)))
-                .andThen(state.setIntent(Intent.NONE)));
+                    driveForward(Inches.of(13))
+                        .withTimeout(1.5)
+                        .andThen(state.setIntent(Intent.CORAL_SCORE_L4_FINAL))
+                        .andThen(
+                            superstructure
+                                .maintainPosition(Position.L4_SCORED)
+                                .until(superstructure::isDoneScoringL4))
+                        .andThen(driveForward(Inches.of(-10)).withTimeout(1))
+                        .andThen(state.setIntent(Intent.NONE))));
 
     // reset intent once coral has been scored
     state
@@ -366,7 +403,7 @@ public class RobotContainer {
         Commands.either(
             Commands.sequence(
                 superstructure.setHeightOverride(60),
-                driveForward(Inches.of(-10)),
+                driveForward(Inches.of(-10)).withTimeout(1.5),
                 superstructure.resetHeightOverride(),
                 superstructure.setPosition(Position.STOWED)),
             superstructure.setPosition(Position.STOWED),
@@ -409,6 +446,16 @@ public class RobotContainer {
                       pose.getRotation()));
             })
         .andThen(new DriveToPose(drivetrain, state::getTargetPose));
+  }
+
+  /** Command sequence to eject algae and reset intent and presence. */
+  private Command ejectAlgaeSequence() {
+    return manipulator
+        .ejectAlgae()
+        .withTimeout(1)
+        .andThen(manipulator.stop())
+        .andThen(state.setIntent(Intent.NONE))
+        .andThen(new InstantCommand(() -> superstructure.setAlgaePresence(false)));
   }
 
   public Command getAutonomousCommand() {

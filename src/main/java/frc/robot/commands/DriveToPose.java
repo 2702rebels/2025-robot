@@ -69,8 +69,8 @@ public class DriveToPose extends Command {
     this.stopCondition = stopCondition;
     addRequirements(drive);
 
-    distanceController.setTolerance(Units.inchesToMeters(1));
-    rotationController.setTolerance(Units.degreesToRadians(2));
+    distanceController.setTolerance(Units.inchesToMeters(1.5));
+    rotationController.setTolerance(Units.degreesToRadians(3));
     rotationController.enableContinuousInput(-Math.PI, Math.PI);
   }
 

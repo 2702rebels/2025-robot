@@ -2,8 +2,11 @@ package frc.robot;
 
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.PubSubOption;
@@ -12,13 +15,16 @@ import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.networktables.StructSubscriber;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.MatchType;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.ReefState;
 import frc.robot.lib.TimestampedCircularBuffer;
+import frc.robot.lib.Tunable;
 import frc.robot.lib.VisionState;
 import java.util.BitSet;
 import java.util.Optional;
@@ -108,7 +114,7 @@ public class RobotState {
     CORAL_SCORE_AUTO,
 
     /** Score coral at L4 (final motion) */
-    CORAL_SCORE_L4,
+    CORAL_SCORE_L4_FINAL,
 
     /** Intake algae (L2 low) */
     ALGAE_INTAKE_L2,
@@ -190,6 +196,9 @@ public class RobotState {
 
   @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
   public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.ALGAE_EJECT);
+
+  @Logged(name = "ShouldScoreAlgaeNet", importance = Importance.INFO)
+  public final Trigger shouldScoreAlgaeNet = new Trigger(() -> intent == Intent.ALGAE_SCORE_NET);
   // spotless:on
 
   private VisionState visionState;
@@ -201,8 +210,36 @@ public class RobotState {
         : null;
   }
 
-  /* Target pose to supply to driveToPose command */
-  private Optional<Pose2d> targetPose;
+  @Logged(name = "VisionPoseAge", importance = Importance.DEBUG)
+  public double getVisionPoseAge() {
+    if (visionState != null && visionState.pose.timestamp() > 0) {
+      return (RobotController.getFPGATime() - visionState.pose.timestamp()) / 1000000.0;
+    }
+
+    return -1;
+  }
+
+  @Logged(name = "ScoringPose", importance = Importance.DEBUG)
+  public Pose2d getScoringPoseDebug() {
+    return scoringPose.isPresent() ? scoringPose.get() : null;
+  }
+
+  /** Target pose to supply to driveToPose command */
+  private Optional<Pose2d> targetPose = Optional.empty();
+
+  /** Target pose for auto scoring */
+  private Optional<Pose2d> scoringPose = Optional.empty();
+
+  /** Most recent robot pose */
+  private Optional<Pose2d> robotPose = Optional.empty();
+
+  /** Trigger for scoring pose presence. */
+  @Logged(name = "HasScoringPose", importance = Importance.INFO)
+  public final Trigger hasScoringPose = new Trigger(() -> scoringPose.isPresent());
+
+  /** Trigger for scoring readiness */
+  @Logged(name = "ScoringReady", importance = Importance.INFO)
+  public final Trigger scoringReady = new Trigger(() -> !visionScoring.get() || isAtScoringPose());
 
   /** Binds external historical pose supplier. */
   public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
@@ -216,12 +253,34 @@ public class RobotState {
 
   /** Gets the score level for automatic scoring (1..4) */
   public int getScoreLevel() {
+    if (DriverStation.isAutonomous() && DriverStation.isAutonomousEnabled()) {
+      return 4;
+    }
+
     return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
   }
 
   public Command setIntent(Intent intent) {
     return Commands.runOnce(
             () -> {
+              if (intent == Intent.CORAL_SCORE_AUTO && visionScoring.get()) {
+                scoringPose =
+                    robotPose.isPresent()
+                        ? getClosestScoringPose(robotPose.get())
+                        : Optional.empty();
+
+                // do not set intent since we are trying to score via vision
+                // and no target is available
+                if (scoringPose.isEmpty()) {
+                  return;
+                }
+              }
+
+              // reset scoring pose when intent is removed
+              if (intent != Intent.CORAL_SCORE_AUTO) {
+                scoringPose = Optional.empty();
+              }
+
               this.intent = intent;
             })
         .withName("SetIntent");
@@ -235,8 +294,32 @@ public class RobotState {
     return targetPose;
   }
 
+  public Optional<Pose2d> getScoringPose() {
+    return scoringPose;
+  }
+
+  public boolean isAtScoringPose() {
+    if (scoringPose.isPresent() && robotPose.isPresent()) {
+      final var _scoringPose = scoringPose.get();
+      final var _robotPose = robotPose.get();
+
+      final var d = _scoringPose.getTranslation().getDistance(_robotPose.getTranslation());
+      final var r =
+          Math.abs(_scoringPose.getRotation().getDegrees() - _robotPose.getRotation().getDegrees());
+
+      // THESE ARE HARDCODED RIGHT NOW
+      return d < Units.inchesToMeters(2) && r < 5;
+    }
+
+    return false;
+  }
+
   public Optional<VisionState> getVisionState() {
     return Optional.ofNullable(visionState);
+  }
+
+  public Command resetScoringPose() {
+    return new InstantCommand(() -> scoringPose = Optional.empty());
   }
 
   /** Synchronizes operator's input with the robot's perspective. */
@@ -328,6 +411,80 @@ public class RobotState {
     }
   }
 
+  /** Gets the closest scoring pose based on the closes reef faces if applicable. */
+  public Optional<Pose2d> getClosestScoringPose(Pose2d robotPose) {
+    final var scoringLevel = getScoreLevel();
+    final var scoringPoses =
+        scoringLevel == 4 ? GameConstants.reefScoringPosesL4 : GameConstants.reefScoringPoses;
+
+    final var robotXY = robotPose.getTranslation();
+
+    // find two closest faces of the reef
+    final var faceDistances = new double[6];
+    for (var i = 0; i < FieldConstants.Reef.faces.length; ++i) {
+      final var face = FieldConstants.fieldPose.apply(FieldConstants.Reef.faces[i]);
+      faceDistances[i] = robotXY.getDistance(face.getTranslation());
+    }
+
+    int face1 = 0;
+    int face2 = 1;
+
+    if (faceDistances[0] > faceDistances[1]) {
+      face1 = 1;
+      face2 = 0;
+    }
+
+    for (var i = 2; i < faceDistances.length; ++i) {
+      if (faceDistances[i] < faceDistances[face1]) {
+        face2 = face1;
+        face1 = i;
+      } else if (faceDistances[i] < faceDistances[face2]) {
+        face2 = i;
+      }
+    }
+
+    // find the closest scoring position that is available
+    Pose2d currentPose = null;
+    double distance = -1;
+
+    final var position1a = getScoringPosition(scoringLevel, face1 * 2, scoringPoses, robotXY);
+    final var position1b = getScoringPosition(scoringLevel, face1 * 2 + 1, scoringPoses, robotXY);
+    final var position2a = getScoringPosition(scoringLevel, face2 * 2, scoringPoses, robotXY);
+    final var position2b = getScoringPosition(scoringLevel, face2 * 2 + 1, scoringPoses, robotXY);
+
+    if (position1a.isPresent()) {
+      currentPose = position1a.get().getFirst();
+      distance = position1a.get().getSecond();
+    }
+
+    if (position1b.isPresent() && (distance < 0 || position1b.get().getSecond() < distance)) {
+      currentPose = position1b.get().getFirst();
+      distance = position1b.get().getSecond();
+    }
+
+    if (position2a.isPresent() && (distance < 0 || position2a.get().getSecond() < distance)) {
+      currentPose = position2a.get().getFirst();
+      distance = position2a.get().getSecond();
+    }
+
+    if (position2b.isPresent() && (distance < 0 || position2b.get().getSecond() < distance)) {
+      currentPose = position2b.get().getFirst();
+      distance = position2b.get().getSecond();
+    }
+
+    return Optional.ofNullable(currentPose);
+  }
+
+  private Optional<Pair<Pose2d, Double>> getScoringPosition(
+      int level, int index, Pose2d[] poses, Translation2d robotXY) {
+    if (reefState.isPositionScored(level, index)) {
+      return Optional.empty();
+    }
+
+    final var pose = FieldConstants.fieldPose.apply(poses[index]);
+    return Optional.of(Pair.of(pose, robotXY.getDistance(pose.getTranslation())));
+  }
+
   /**
    * Runs logic at the end of the periodic cycle.
    *
@@ -344,6 +501,7 @@ public class RobotState {
 
   /** Updates odometry based on direct and vision observations. */
   public void updateOdometry(long timestamp, Pose2d pose, ChassisSpeeds fieldSpeeds) {
+    robotPose = Optional.of(pose);
     chassisSpeeds.enqueue(timestamp, fieldSpeeds);
   }
 
@@ -356,4 +514,7 @@ public class RobotState {
   public Optional<Pose2d> getPoseAt(long timestamp) {
     return historicalPoseSupplier.apply(timestamp);
   }
+
+  public static final Tunable.BooleanValue visionScoring =
+      Tunable.value("Control/VisionScoring", true);
 }

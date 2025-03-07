@@ -58,6 +58,19 @@ public class ReefState implements StructSerializable {
     return false;
   }
 
+  /** Determines whether position is marked as scored. */
+  public boolean isPositionScored(int level, int index) {
+    switch (level) {
+      case 2:
+        return coralsL2.get(index);
+      case 3:
+        return coralsL3.get(index);
+      case 4:
+        return coralsL4.get(index);
+    }
+    return false;
+  }
+
   public ReefState() {
     // algae is preloaded
     algae = new BitSet(6);

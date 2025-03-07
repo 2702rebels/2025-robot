@@ -15,12 +15,13 @@ import frc.robot.lib.Tunable;
  */
 public final class Manipulator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double CORAL_INTAKE_VELOCITY = 0.75;
-  private static final double CORAL_INTAKE_VELOCITY_GUIDE = 0.75;
-  private static final double CORAL_EJECT_VELOCITY = 0.4;
+  private static final double __kCoralIntakeVelocity = 0.75;
+  private static final double __kCoralIntakeVelocityGuide = 0.75;
+  private static final double __kCoralEjectVelocity = 0.4;
 
-  private static final double ALGAE_INTAKE_VELOCITY = 0.5;
-  private static final double ALGAE_EJECT_VELOCITY = 0.5;
+  private static final double __kAlgaeIntakeVelocity = 0.5;
+  private static final double __kAlgaeEjectVelocity = 0.5;
+  private static final double __kAlgaeHoldVelocity = 0.2;
 
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;
@@ -117,10 +118,20 @@ public final class Manipulator extends SubsystemBase {
     return runEnd(
             () -> {
               motorCoral.stopMotor();
-              motorCoral.set(algaeEjectVelocity.get());
+              motorGuide.set(-algaeEjectVelocity.get());
             },
             this::stopMotors)
         .withName("EjectAlgae");
+  }
+
+  public Command holdAlgae() {
+    return runEnd(
+            () -> {
+              motorCoral.stopMotor();
+              motorGuide.set(algaeHoldVelocity.get());
+            },
+            this::stopMotors)
+        .withName("HoldAlgae");
   }
 
   public Command stop() {
@@ -128,11 +139,12 @@ public final class Manipulator extends SubsystemBase {
   }
 
   // spotless:off
-  private static Tunable.DoubleValue coralIntakeVelocity = Tunable.value("Manipulator/Coral/IntakeVelocity", CORAL_INTAKE_VELOCITY);
-  private static Tunable.DoubleValue coralIntakeVelocityGuide = Tunable.value("Manipulator/Coral/IntakeVelocityGuide", CORAL_INTAKE_VELOCITY_GUIDE);
-  private static Tunable.DoubleValue coralEjectVelocity = Tunable.value("Manipulator/Coral/EjectVelocity", CORAL_EJECT_VELOCITY);
+  private static Tunable.DoubleValue coralIntakeVelocity = Tunable.value("Manipulator/Coral/IntakeVelocity", __kCoralIntakeVelocity);
+  private static Tunable.DoubleValue coralIntakeVelocityGuide = Tunable.value("Manipulator/Coral/IntakeVelocityGuide", __kCoralIntakeVelocityGuide);
+  private static Tunable.DoubleValue coralEjectVelocity = Tunable.value("Manipulator/Coral/EjectVelocity", __kCoralEjectVelocity);
 
-  private static Tunable.DoubleValue algaeIntakeVelocity = Tunable.value("Manipulator/Algae/IntakeVelocity", ALGAE_INTAKE_VELOCITY);
-  private static Tunable.DoubleValue algaeEjectVelocity = Tunable.value("Manipulator/Algae/EjectVelocity", ALGAE_EJECT_VELOCITY);
+  private static Tunable.DoubleValue algaeIntakeVelocity = Tunable.value("Manipulator/Algae/IntakeVelocity", __kAlgaeIntakeVelocity);
+  private static Tunable.DoubleValue algaeEjectVelocity = Tunable.value("Manipulator/Algae/EjectVelocity", __kAlgaeEjectVelocity);
+  private static Tunable.DoubleValue algaeHoldVelocity = Tunable.value("Manipulator/Algae/HoldVelocity", __kAlgaeHoldVelocity);
   // spotless:on
 }

@@ -83,19 +83,19 @@ public final class Constants {
     /** PID configuration to pose chasing controllers */
     public static final class PoseChasing {
       /** kP used for the translation PID drive controllers */
-      public static final double translationKp = 5;
+      public static final double translationKp = 2;
 
       /** kI used for the translation PID drive controllers */
-      public static final double translationKi = 0;
+      public static final double translationKi = 0.01;
 
       /** kD used for the translation PID drive controllers */
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 3;
+      public static final double rotationKp = 3.5;
 
       /** kI used for the rotation PID drive controllers */
-      public static final double rotationKi = 0;
+      public static final double rotationKi = 0.01;
 
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;
