@@ -254,7 +254,7 @@ public class RobotState {
   /** Gets the score level for automatic scoring (1..4) */
   public int getScoreLevel() {
     if (DriverStation.isAutonomous() && DriverStation.isAutonomousEnabled()) {
-      return 4;
+      return 2;
     }
 
     return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;

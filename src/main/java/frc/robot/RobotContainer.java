@@ -132,7 +132,8 @@ public class RobotContainer {
         "DriveForward",
         () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
 
-    autoChooser.addRoutine("Score L4 (HG)", autoRoutines::scoreL4_HG);
+    autoChooser.addRoutine(
+        "Score L2 (HG)", () -> autoRoutines.scoreL4_HG(driveForward(Inches.of(24)).withTimeout(5)));
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
@@ -215,7 +216,7 @@ public class RobotContainer {
         .onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
 
     // algae scoring
-    //Commented out since untested.
+    // Commented out since untested.
     // controllerDriver
     //     .rightTrigger()
     //     .and(superstructure.hasAlgae)
@@ -236,9 +237,11 @@ public class RobotContainer {
     controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
 
     // temporary fix until we have limit switch mechanism in place
-    controllerDriver.y().onTrue(
-        new InstantCommand(
-            () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
+    controllerDriver
+        .y()
+        .onTrue(
+            new InstantCommand(
+                () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
     // controllerDriver.povLeft().whileTrue(new WheelDiameterCharacterization(drivetrain, 1));
     // controllerDriver.povRight().whileTrue(new WheelDiameterCharacterization(drivetrain, -1));

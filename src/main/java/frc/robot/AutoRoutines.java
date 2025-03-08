@@ -21,10 +21,12 @@ public class AutoRoutines {
     return routine;
   }
 
-  public AutoRoutine scoreL4_HG() {
-    final AutoRoutine routine = factory.newRoutine("ScoreL4_HG");
+  public AutoRoutine scoreL4_HG(Command driveForwards) {
+    final AutoRoutine routine = factory.newRoutine("ScoreL2_HG");
 
-    routine.active().onTrue(RobotState.getInstance().setIntent(Intent.CORAL_SCORE_AUTO));
+    routine
+        .active()
+        .onTrue(driveForwards.andThen(RobotState.getInstance().setIntent(Intent.CORAL_SCORE_AUTO)));
     return routine;
   }
 
