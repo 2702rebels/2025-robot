@@ -11,6 +11,7 @@ import edu.wpi.first.epilogue.Logged.Strategy;
 import edu.wpi.first.epilogue.logging.errors.ErrorHandler;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -46,6 +47,8 @@ public class Robot extends TimedRobot {
     robotContainer.drivetrain.setVisionMeasurementStdDevs(
         VecBuilder.fill(
             Units.inchesToMeters(4), Units.inchesToMeters(4), Units.degreesToRadians(60)));
+
+    DataLogManager.start();
 
     // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
     Epilogue.configure(
