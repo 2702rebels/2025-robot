@@ -101,8 +101,7 @@ public class RobotContainer {
   // slows down max rotation speed for more precise movements
   private final Trigger precisionRotation = controllerDriver.leftStick();
 
-  private final Trigger toggleAlgaeButton = controllerDriver.a();
-  private final Trigger ejectAlgaeButton = controllerDriver.y();
+  private final Trigger toggleAlgaeButton = controllerDriver.y();
 
   public RobotContainer(RobotState state) {
     this.state = state;
