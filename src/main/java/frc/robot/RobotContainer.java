@@ -101,8 +101,6 @@ public class RobotContainer {
   // slows down max rotation speed for more precise movements
   private final Trigger precisionRotation = controllerDriver.leftStick();
 
-  private final Trigger toggleAlgaeButton = controllerDriver.y();
-
   public RobotContainer(RobotState state) {
     this.state = state;
 
@@ -217,10 +215,11 @@ public class RobotContainer {
         .onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
 
     // algae scoring
-    controllerDriver
-        .rightTrigger()
-        .and(superstructure.hasAlgae)
-        .onTrue(state.setIntent(Intent.ALGAE_SCORE_NET));
+    //Commented out since untested.
+    // controllerDriver
+    //     .rightTrigger()
+    //     .and(superstructure.hasAlgae)
+    //     .onTrue(state.setIntent(Intent.ALGAE_SCORE_NET));
 
     controllerDriver
         .rightBumper()
@@ -236,9 +235,8 @@ public class RobotContainer {
     controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
     controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
 
-    // bind A to manually toggle algae presence
     // temporary fix until we have limit switch mechanism in place
-    toggleAlgaeButton.onTrue(
+    controllerDriver.y().onTrue(
         new InstantCommand(
             () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
