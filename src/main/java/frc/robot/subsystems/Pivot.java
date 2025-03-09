@@ -28,7 +28,7 @@ public class Pivot extends SubsystemBase {
   private static final double __kD = 0.;
 
   private static final double __kS = 0;
-  private static final double __kG = 0.7;
+  private static final double __kG = 0.2;
   private static final double __kV = 0.012;
   private static final double __kA = 0;
   private static final double __kMaxVelocity = 480; // degrees/s
