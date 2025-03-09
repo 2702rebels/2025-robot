@@ -133,7 +133,7 @@ public class RobotContainer {
         () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
 
     autoChooser.addRoutine(
-        "Score L2 (HG)", () -> autoRoutines.scoreL4_HG(driveForward(Inches.of(24)).withTimeout(5)));
+        "Score L2 (HG)", () -> autoRoutines.scoreL4_HG(driveForward(Inches.of(36)).withTimeout(5)));
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
