@@ -357,8 +357,7 @@ public class RobotContainer {
         .or(state.shouldScoreCoralL4)
         .and(superstructure.hasCoral)
         .and(state.scoringReady)
-        .onTrue(superstructure.setAutoScoringPosition())
-        .onTrue(drivetrain.brake().until(superstructure.canScoreAuto));
+        .onTrue(superstructure.setAutoScoringPosition());
 
     // scoring L2, L3
     state
