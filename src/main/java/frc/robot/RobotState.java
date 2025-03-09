@@ -185,6 +185,9 @@ public class RobotState {
   @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
   public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO && getScoreLevel() == 4);
 
+  @Logged(name = "ShouldScoreCoralL4Final", importance = Importance.INFO)
+  public final Trigger shoulScoreCoralL4Final = new Trigger(()-> intent == Intent.CORAL_SCORE_L4_FINAL);
+
   @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
   public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L2);
 

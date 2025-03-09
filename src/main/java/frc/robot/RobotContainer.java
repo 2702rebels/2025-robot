@@ -208,6 +208,7 @@ public class RobotContainer {
     controllerDriver
         .rightTrigger()
         .and(superstructure.hasCoral)
+        .and(superstructure.canScoreAuto.negate())
         .onTrue(state.setIntent(Intent.CORAL_SCORE_AUTO));
 
     controllerDriver
@@ -343,6 +344,7 @@ public class RobotContainer {
         .shouldScoreCoralL1
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL1)
+        .and(controllerDriver.rightBumper().or(() -> DriverStation.isAutonomous()))
         .whileTrue(manipulator.ejectCoral());
 
     // score coral via auto target
@@ -363,6 +365,7 @@ public class RobotContainer {
         .shouldScoreCoralL23
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreAuto)
+        .and(controllerDriver.rightTrigger().or(() -> DriverStation.isAutonomous()))
         .whileTrue(manipulator.ejectCoral());
 
     // scoring L4
@@ -376,13 +379,18 @@ public class RobotContainer {
                 .andThen(
                     driveForward(Inches.of(13))
                         .withTimeout(1.5)
-                        .andThen(state.setIntent(Intent.CORAL_SCORE_L4_FINAL))
-                        .andThen(
-                            superstructure
-                                .maintainPosition(Position.L4_SCORED)
-                                .until(superstructure::isDoneScoringL4))
-                        .andThen(driveForward(Inches.of(-10)).withTimeout(1))
-                        .andThen(state.setIntent(Intent.NONE))));
+                        .andThen(state.setIntent(Intent.CORAL_SCORE_L4_FINAL))));
+
+    state
+        .shoulScoreCoralL4Final
+        .and(superstructure.hasCoral)
+        .and(controllerDriver.rightTrigger())
+        .onTrue(
+            superstructure
+                .maintainPosition(Position.L4_SCORED)
+                .until(superstructure::isDoneScoringL4)
+                .andThen(driveForward(Inches.of(-10)).withTimeout(1))
+                .andThen(state.setIntent(Intent.NONE)));
 
     // reset intent once coral has been scored
     state
