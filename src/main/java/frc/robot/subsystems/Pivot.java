@@ -24,7 +24,7 @@ public class Pivot extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
   // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
   // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
-  private static final double __kP = 0.007;
+  private static final double __kP = 0.01;
   private static final double __kD = 0.;
 
   private static final double __kS = 0;
