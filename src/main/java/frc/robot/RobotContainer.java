@@ -35,6 +35,7 @@ import frc.robot.commands.DriveToPose;
 import frc.robot.generated.TunerConstants;
 import frc.robot.lib.Tunable;
 import frc.robot.subsystems.AprilTagDetector;
+import frc.robot.subsystems.Climb;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.Manipulator;
@@ -79,6 +80,10 @@ public class RobotContainer {
   private final Manipulator manipulator =
       new Manipulator(
           Constants.CanID.MOTOR_MANIPULATOR_GUIDE, Constants.CanID.MOTOR_MANIPULATOR_CORAL);
+
+  @Logged(name = "Climb", importance = Importance.INFO)
+  private final Climb climb =
+      new Climb(Constants.CanID.MOTOR_CLIMB_ARM, Constants.CanID.MOTOR_CLIMB_WINCH);
 
   @Logged(name = "Superstructure", importance = Importance.INFO)
   private final Superstructure superstructure = new Superstructure(elevator, pivot, manipulator);
@@ -228,14 +233,24 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(state.setIntent(Intent.ALGAE_EJECT));
 
-    controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
 
-    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
-    controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
+    // controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    // controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
 
-    controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
-    controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+    // controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
+    // controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+
+    controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
+    controllerDriver
+        .povUp()
+        .onTrue(new InstantCommand(() -> climb.setArmPosition(climbArm.get()), climb));
+
+    controllerDriver.povLeft().onTrue(new InstantCommand(() -> climb.setWinchPosition(0), climb));
+    controllerDriver
+        .povRight()
+        .onTrue(new InstantCommand(() -> climb.setWinchPosition(climbWinch.get()), climb));
 
     // bind A to manually toggle algae presence
     // temporary fix until we have limit switch mechanism in place
@@ -490,4 +505,8 @@ public class RobotContainer {
   private static final Tunable.DoubleValue endgameAlert2 = Tunable.value("Endgame/Alert2", 10.0);
   private static final Tunable.DoubleValue preciseRotation = Tunable.value("Control/PreciseRotation", 0.2);
   // spotless:on
+
+  private static final Tunable.DoubleValue climbArm = Tunable.value("Climb/Arm/Position", 45);
+  private static final Tunable.DoubleValue climbWinch =
+      Tunable.value("Climb/Winch/Position", -13.5);
 }
