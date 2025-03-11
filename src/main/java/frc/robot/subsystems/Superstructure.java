@@ -56,7 +56,7 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kBranchOffset = 8;
 
   private static final double kSafeEjectAngle = 50;
-  private static final double kAngleTolerance = 2;
+  private static final double kAngleTolerance = 3;
   private static final double kElevatorTolerance = 1;
 
   @Logged(name = "Position", importance = Importance.INFO)
