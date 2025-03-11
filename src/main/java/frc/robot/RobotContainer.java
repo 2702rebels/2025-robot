@@ -233,24 +233,25 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(state.setIntent(Intent.ALGAE_EJECT));
 
-    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
 
-    // controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
-    // controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
+    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
 
-    // controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
-    // controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+    controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
+    controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
 
-    controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
-    controllerDriver
-        .povUp()
-        .onTrue(new InstantCommand(() -> climb.setArmPosition(climbArm.get()), climb));
+    // controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
+    // controllerDriver
+    //     .povUp()
+    //     .onTrue(new InstantCommand(() -> climb.setArmPosition(climbArm.get()), climb));
 
-    controllerDriver.povLeft().onTrue(new InstantCommand(() -> climb.setWinchPosition(0), climb));
-    controllerDriver
-        .povRight()
-        .onTrue(new InstantCommand(() -> climb.setWinchPosition(climbWinch.get()), climb));
+    // controllerDriver.povLeft().onTrue(new InstantCommand(() -> climb.setWinchPosition(0),
+    // climb));
+    // controllerDriver
+    //     .povRight()
+    //     .onTrue(new InstantCommand(() -> climb.setWinchPosition(climbWinch.get()), climb));
 
     // bind A to manually toggle algae presence
     // temporary fix until we have limit switch mechanism in place
@@ -312,11 +313,11 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(superstructure.setPosition(Position.NET));
 
-    state
-        .shouldScoreAlgaeNet
-        .and(superstructure.hasAlgae)
-        .and(superstructure.canScoreAlgae)
-        .onTrue(ejectAlgaeSequence());
+    // state
+    //     .shouldScoreAlgaeNet
+    //     .and(superstructure.hasAlgae)
+    //     .and(superstructure.canScoreAlgae)
+    //     .onTrue(ejectAlgaeSequence());
 
     // intake coral from the floor
     state
