@@ -19,7 +19,7 @@ public final class Constants {
     public static final boolean statsEnabled = true;
 
     /** SysId bindings */
-    public static final boolean sysIdBindings = true;
+    public static final boolean sysIdBindings = false;
 
     /** Driving disabled */
     public static final boolean drivingDisabled = false;
@@ -141,5 +141,16 @@ public final class Constants {
 
     /** PP robot configuration */
     public static final RobotConfig robotConfig = null;
+  }
+
+  public static final class LedConstants {
+    /** PWM port on RoboRio */
+    public static final int PWM_PORT = 0;
+
+    /* Total length of LED strip (number of addressable LEDs) */
+    public static final int kLength = 39;
+
+    /** Individual segments */
+    public static final int[] kSegments = {2, 7, 7, 7, 7, 7, 2};
   }
 }

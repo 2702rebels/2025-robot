@@ -38,6 +38,7 @@ import frc.robot.subsystems.AprilTagDetector;
 import frc.robot.subsystems.Climb;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Elevator;
+import frc.robot.subsystems.Led;
 import frc.robot.subsystems.Manipulator;
 import frc.robot.subsystems.ObjectDetector;
 import frc.robot.subsystems.Pivot;
@@ -96,6 +97,8 @@ public class RobotContainer {
   @Logged(name = "AprilTagDetector", importance = Importance.INFO)
   private final AprilTagDetector aprilTagDetector = new AprilTagDetector();
 
+  private final Led led = new Led(Constants.LedConstants.PWM_PORT);
+
   // startup validation checklist
   @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
   private boolean pivotEncoderValid = false;
@@ -136,6 +139,7 @@ public class RobotContainer {
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
     configureTriggers();
+    configureLedTriggers();
     configureDriverBindings();
   }
 
@@ -221,14 +225,14 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(state.setIntent(Intent.ALGAE_EJECT));
 
-    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
 
-    // controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
-    // controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
+    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
 
-    // controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
-    // controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+    controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
+    controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
 
     // controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
     // controllerDriver
@@ -433,6 +437,15 @@ public class RobotContainer {
                 rumble(Milliseconds.of(200)),
                 Commands.waitTime(Milliseconds.of(100)),
                 rumble(Milliseconds.of(200))));
+  }
+
+  private void configureLedTriggers() {
+    led.setDefaultCommand(led.setDefault().ignoringDisable(true));
+
+    superstructure.hasCoral.whileTrue(led.setHoldingCoral());
+
+    state.shouldIntakeAlgae.whileTrue(led.setIntakingAlgae());
+    state.shouldIntakeCoral.whileTrue(led.setIntakingCoral());
   }
 
   /** Commands drive forward fixed distance. */
