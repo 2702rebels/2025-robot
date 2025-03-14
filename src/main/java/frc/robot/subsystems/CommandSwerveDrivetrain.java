@@ -8,6 +8,7 @@ import choreo.trajectory.SwerveSample;
 import com.ctre.phoenix6.SignalLogger;
 import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.commands.FollowPathCommand;
@@ -32,6 +33,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
+import frc.robot.lib.SysIdSwerveTranslationTorqueCurrent;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -60,11 +62,11 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
   // swerve request to apply during field-centric path following
   private final SwerveRequest.ApplyFieldSpeeds pathApplyFieldSpeeds =
-      new SwerveRequest.ApplyFieldSpeeds();
+      new SwerveRequest.ApplyFieldSpeeds().withDriveRequestType(DriveRequestType.Velocity);
 
   // swerve request to apply during robot-centric path following
   private final SwerveRequest.ApplyRobotSpeeds pathApplyRobotSpeeds =
-      new SwerveRequest.ApplyRobotSpeeds();
+      new SwerveRequest.ApplyRobotSpeeds().withDriveRequestType(DriveRequestType.Velocity);
 
   // PID controllers used with Choreo path following
   private final PIDController pathXController =
@@ -89,24 +91,45 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           Constants.cyclePeriodSeconds);
 
   // swerve requests to apply during SysId characterization
-  private final SwerveRequest.SysIdSwerveTranslation translationCharacterization =
+  private final SwerveRequest.SysIdSwerveTranslation translationVoltageCharacterization =
       new SwerveRequest.SysIdSwerveTranslation();
+  private final SysIdSwerveTranslationTorqueCurrent translationCurrentCharacterization =
+      new SysIdSwerveTranslationTorqueCurrent();
   private final SwerveRequest.SysIdSwerveSteerGains steerCharacterization =
       new SwerveRequest.SysIdSwerveSteerGains();
   private final SwerveRequest.SysIdSwerveRotation rotationCharacterization =
       new SwerveRequest.SysIdSwerveRotation();
 
   // SysId routine for characterizing translation (used to find PID gains for the drive motors)
-  private final SysIdRoutine sysIdRoutineTranslation =
+  private final SysIdRoutine sysIdRoutineTranslationVoltage =
       new SysIdRoutine(
           new SysIdRoutine.Config(
               null, // Use default ramp rate (1V/s)
               Volts.of(4), // Reduce dynamic step voltage to 4V to prevent brownout
               null, // Use default timeout (10s)
               // Log state with SignalLogger class
-              state -> SignalLogger.writeString("SysIdTranslation_State", state.toString())),
+              state -> SignalLogger.writeString("SysIdTranslationVoltage_State", state.toString())),
           new SysIdRoutine.Mechanism(
-              output -> setControl(translationCharacterization.withVolts(output)), null, this));
+              output -> setControl(translationVoltageCharacterization.withVolts(output)),
+              null,
+              this));
+
+  // SysId routine for characterizing translation (used to find PID gains for the drive motors)
+  // [!] SysId expects Volts, treat Volts as Amps for characterization purposes
+  private final SysIdRoutine sysIdRoutineTranslationCurrent =
+      new SysIdRoutine(
+          new SysIdRoutine.Config(
+              Volts.of(10).per(Second), // ramp of 5A/s
+              Volts.of(20), // dynamic step of 20A
+              Seconds.of(10), // timeout of 10s
+              // Log state with SignalLogger class
+              state -> SignalLogger.writeString("SysIdTranslationCurrent_State", state.toString())),
+          new SysIdRoutine.Mechanism(
+              output ->
+                  setControl(
+                      translationCurrentCharacterization.withTorqueCurrent(output.in(Volts))),
+              null,
+              this));
 
   // SysId routine for characterizing steer (used to find PID gains for the steer motors)
   private final SysIdRoutine sysIdRoutineSteer =
@@ -145,7 +168,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
               this));
 
   // SysId routine to use
-  private SysIdRoutine sysIdRoutineToApply = sysIdRoutineTranslation;
+  private SysIdRoutine sysIdRoutineToApply = sysIdRoutineTranslationVoltage;
 
   private void init() {
     pathThetaController.enableContinuousInput(-Math.PI, Math.PI);

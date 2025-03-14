@@ -11,10 +11,10 @@ import choreo.auto.AutoFactory;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import dev.doglog.DogLog;
-import dev.doglog.DogLogOptions;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.units.measure.Distance;
@@ -57,8 +57,7 @@ public class RobotContainer {
       new SwerveRequest.FieldCentric()
           .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
           .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
-          .withDriveRequestType(
-              DriveRequestType.OpenLoopVoltage); // use open-loop control for drive motors
+          .withDriveRequestType(DriveRequestType.Velocity);
 
   private final RobotState state;
 
@@ -70,7 +69,10 @@ public class RobotContainer {
 
   @Logged(name = "Elevator", importance = Importance.INFO)
   private final Elevator elevator =
-      new Elevator(Constants.CanID.MOTOR_ELEVATOR_LEADER, Constants.CanID.MOTOR_ELEVATOR_FOLLOWER);
+      new Elevator(
+          Constants.CanivoreID.MOTOR_ELEVATOR_LEADER,
+          Constants.CanivoreID.MOTOR_ELEVATOR_FOLLOWER,
+          TunerConstants.kCANBus);
 
   @Logged(name = "Pivot", importance = Importance.INFO)
   private final Pivot pivot =
@@ -109,6 +111,8 @@ public class RobotContainer {
   private final Trigger toggleAlgaeButton = controllerDriver.a();
   private final Trigger ejectAlgaeButton = controllerDriver.y();
 
+  private final SlewRateLimiter velocityLimiter = new SlewRateLimiter(1, -5, 0);
+
   public RobotContainer(RobotState state) {
     this.state = state;
 
@@ -117,20 +121,6 @@ public class RobotContainer {
 
     // bind vision state supplier
     state.setVisionStateSupplier(aprilTagDetector::getState);
-
-    // configure DogLog logging
-    if (Constants.Settings.loggingEnabled) {
-      DogLog.setOptions(new DogLogOptions().withCaptureConsole(true).withLogExtras(true));
-
-      // log metadata
-      DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
-      DogLog.log("Metadata/BuildDate", BuildConstants.BUILD_DATE);
-      DogLog.log("Metadata/GitSHA", BuildConstants.GIT_SHA);
-      DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
-      DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
-    } else {
-      DogLog.setEnabled(false);
-    }
 
     autoFactory = drivetrain.createAutoFactory();
     autoRoutines = new AutoRoutines(autoFactory);
@@ -141,6 +131,7 @@ public class RobotContainer {
         () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
 
     autoChooser.addRoutine("Score L4 (HG)", autoRoutines::scoreL4_HG);
+    autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
@@ -162,19 +153,28 @@ public class RobotContainer {
       drivetrain.setDefaultCommand(
           // drivetrain will execute this command periodically
           drivetrain.applyRequest(
-              () ->
-                  drive
-                      // drive forward with negative Y (forward)
-                      .withVelocityX(
-                          -smoothInput(controllerDriver.getLeftY()) * maxSpeedMetersPerSecond)
-                      // drive left with negative X (left)
-                      .withVelocityY(
-                          -smoothInput(controllerDriver.getLeftX()) * maxSpeedMetersPerSecond)
-                      // drive counterclockwise with negative X (left)
-                      .withRotationalRate(
-                          -smoothInput(controllerDriver.getRightX())
-                              * maxAngularRateRadiansPerSecond
-                              * (precisionRotation.getAsBoolean() ? preciseRotation.get() : 1))));
+              () -> {
+                // drive forward with negative Y (forward)
+                var vx = -smoothInput(controllerDriver.getLeftY());
+                // drive left with negative X (left)
+                var vy = -smoothInput(controllerDriver.getLeftX());
+
+                // apply rate limiter
+                final var heading = Math.atan2(vx, vy);
+                final var v = MathUtil.clamp(velocityLimiter.calculate(Math.hypot(vx, vy)), -1, 1);
+
+                vx = v * Math.sin(heading);
+                vy = v * Math.cos(heading);
+
+                return drive
+                    .withVelocityX(vx * maxSpeedMetersPerSecond)
+                    .withVelocityY(vy * maxSpeedMetersPerSecond)
+                    // drive counterclockwise with negative X (left)
+                    .withRotationalRate(
+                        -smoothInput(controllerDriver.getRightX())
+                            * maxAngularRateRadiansPerSecond
+                            * (precisionRotation.getAsBoolean() ? preciseRotation.get() : 1));
+              }));
     }
 
     // reset the field-centric heading
@@ -186,22 +186,10 @@ public class RobotContainer {
     // run SysId routines when holding back/start and X/Y
     // note that each routine should be run exactly once in a single log
     if (Constants.Settings.sysIdBindings) {
-      controllerDriver
-          .back()
-          .and(controllerDriver.y())
-          .whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
-      controllerDriver
-          .back()
-          .and(controllerDriver.x())
-          .whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
-      controllerDriver
-          .start()
-          .and(controllerDriver.y())
-          .whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
-      controllerDriver
-          .start()
-          .and(controllerDriver.x())
-          .whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
+      controllerDriver.povRight().whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
+      controllerDriver.povLeft().whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
+      controllerDriver.povUp().whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
+      controllerDriver.povDown().whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
     }
 
     drivetrain.registerTelemetry(logger::update);
@@ -233,14 +221,14 @@ public class RobotContainer {
         .and(superstructure.hasAlgae)
         .onTrue(state.setIntent(Intent.ALGAE_EJECT));
 
-    controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    // controllerDriver.povLeft().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
+    // controllerDriver.povRight().onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
 
-    controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
-    controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
+    // controllerDriver.povDown().onTrue(state.setIntent(Intent.CORAL_EJECT));
+    // controllerDriver.povDown().onFalse(state.setIntent(Intent.NONE));
 
-    controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
-    controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
+    // controllerDriver.povUp().onTrue(state.setIntent(Intent.HOVER));
+    // controllerDriver.povUp().onFalse(state.setIntent(Intent.NONE));
 
     // controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
     // controllerDriver

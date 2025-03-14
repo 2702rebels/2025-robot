@@ -4,21 +4,27 @@
 
 package frc.robot;
 
-import com.ctre.phoenix6.Utils;
+import dev.doglog.DogLog;
+import dev.doglog.DogLogOptions;
 import edu.wpi.first.epilogue.Epilogue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Strategy;
 import edu.wpi.first.epilogue.logging.errors.ErrorHandler;
-import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.lib.PhoenixUtil;
 import frc.robot.lib.Tunable;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.util.List;
 
 @Logged(strategy = Strategy.OPT_IN)
 public class Robot extends TimedRobot {
+  private final GCStatsCollector gcStatsCollector = new GCStatsCollector();
+
   private Command autonomousCommand;
 
   @Logged(name = "Container")
@@ -29,40 +35,47 @@ public class Robot extends TimedRobot {
 
   private final Vision vision;
 
-  private final double kVisionCutoff = 60 * 1000; // (60ms) in microseconds
-  private final double kVisionLinearTolerance = Units.feetToMeters(4);
-  private final double kVisionRotationTolerance = Units.degreesToRadians(90);
-
-  private final boolean kUseVision = true;
-
-  // accept first vision update as ground truth
-  private boolean visionSynced = false;
-
   public Robot() {
     robotState = RobotState.getInstance();
     vision = Vision.getInstance();
     robotContainer = new RobotContainer(robotState);
 
-    robotContainer.drivetrain.setVisionMeasurementStdDevs(
-        VecBuilder.fill(
-            Units.inchesToMeters(4), Units.inchesToMeters(4), Units.degreesToRadians(60)));
+    if (Constants.Settings.loggingEnabled) {
+      DataLogManager.start(); // required for Epilogue data to be logged to disk
 
-    // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
-    Epilogue.configure(
-        config -> {
-          config.root = "Robot";
+      DogLog.setOptions(
+          new DogLogOptions()
+              .withCaptureConsole(true)
+              .withLogExtras(true)
+              .withCaptureNt(true) // required for Epilogue data to be logged to disk
+          );
 
-          if (isSimulation()) {
-            // if running in simulation, then we'd want to re-throw any errors that
-            // occur so we can debug and fix them!
-            config.errorHandler = ErrorHandler.crashOnError();
-          }
+      // log metadata
+      DogLog.log("Metadata/ProjectName", BuildConstants.MAVEN_NAME);
+      DogLog.log("Metadata/BuildDate", BuildConstants.BUILD_DATE);
+      DogLog.log("Metadata/GitSHA", BuildConstants.GIT_SHA);
+      DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
+      DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
 
-          // change to CRITICAL for more detailed logging (where supported)
-          config.minimumImportance = Logged.Importance.DEBUG;
-        });
+      // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
+      Epilogue.configure(
+          config -> {
+            config.root = "/Robot";
 
-    Epilogue.bind(this);
+            if (isSimulation()) {
+              // if running in simulation, then we'd want to re-throw any errors that
+              // occur so we can debug and fix them!
+              config.errorHandler = ErrorHandler.crashOnError();
+            }
+
+            // change to CRITICAL for more detailed logging (where supported)
+            config.minimumImportance = Logged.Importance.DEBUG;
+          });
+
+      Epilogue.bind(this);
+    } else {
+      DogLog.setEnabled(false);
+    }
   }
 
   @Override
@@ -73,71 +86,16 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
     Tunable.periodic();
+    PhoenixUtil.refreshSignals();
 
     robotState.enterPeriodic();
     CommandScheduler.getInstance().run();
     robotState.exitPeriodic();
 
-    // update odometry tracker
-    robotState.updateOdometry(
-        RobotController.getFPGATime(),
-        robotContainer.drivetrain.getPose(),
-        robotContainer.drivetrain.getFieldSpeeds());
-
-    if (kUseVision) {
-      visionPeriodic();
+    if (Constants.Settings.statsEnabled) {
+      DogLog.log("Stats/PeriodicMS", (RobotController.getFPGATime() - getLoopStartTime()) / 1000.0);
+      gcStatsCollector.update();
     }
-  }
-
-  private void visionPeriodic() {
-    final var visionState = robotState.getVisionState();
-    if (visionState.isEmpty()) {
-      return;
-    }
-
-    final var visionPoseValue = visionState.get().pose;
-    final var visionPoseTimestamp = visionPoseValue.timestamp();
-    final var visionPose = visionPoseValue.value();
-
-    // invalid pose
-    if (visionPoseTimestamp <= 0) {
-      return;
-    }
-
-    // pose too old
-    if (RobotController.getFPGATime() - visionPoseTimestamp > kVisionCutoff) {
-      return;
-    }
-
-    final var driveState = robotContainer.drivetrain.getState();
-    final double omegaRotationsPerSecond =
-        Units.radiansToRotations(driveState.Speeds.omegaRadiansPerSecond);
-
-    // rotating too fast
-    if (omegaRotationsPerSecond > 1) {
-      return;
-    }
-
-    if (visionSynced) {
-      // no historical pose
-      final var robotPoseAtTimestamp = robotState.getPoseAt(visionPoseTimestamp);
-      if (robotPoseAtTimestamp.isEmpty()) {
-        return;
-      }
-
-      final var twist = visionPose.log(robotPoseAtTimestamp.get());
-      if (Math.abs(twist.dx) > kVisionLinearTolerance
-          || Math.abs(twist.dy) > kVisionLinearTolerance
-          || Math.abs(twist.dtheta) > kVisionRotationTolerance) {
-        return;
-      }
-    } else {
-      visionSynced = true;
-      robotContainer.drivetrain.resetPose(visionPose);
-    }
-
-    robotContainer.drivetrain.addVisionMeasurement(
-        visionPose, Utils.fpgaToCurrentTime(visionPoseTimestamp / 1000000.0));
   }
 
   @Override
@@ -195,4 +153,34 @@ public class Robot extends TimedRobot {
 
   @Override
   public void simulationPeriodic() {}
+
+  /**
+   * GC stats collector borrowed from AdvantageKit.
+   * https://github.com/Mechanical-Advantage/AdvantageKit/blob/master/akit/src/main/java/org/littletonrobotics/junction/LoggedRobot.java
+   */
+  private static final class GCStatsCollector {
+    private List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+    private final long[] lastTimeMS = new long[gcBeans.size()];
+    private final long[] lastCounts = new long[gcBeans.size()];
+
+    public void update() {
+      long timeMS = 0;
+      long counts = 0;
+
+      for (int i = 0; i < gcBeans.size(); i++) {
+        final var gcBean = gcBeans.get(i);
+        final var gcTimeMS = gcBean.getCollectionTime();
+        final var gcCounts = gcBean.getCollectionCount();
+
+        timeMS += gcTimeMS - lastTimeMS[i];
+        counts += gcCounts - lastCounts[i];
+
+        lastTimeMS[i] = gcTimeMS;
+        lastCounts[i] = gcCounts;
+      }
+
+      DogLog.log("Stats/GCTimeMS", (double) timeMS);
+      DogLog.log("Stats/GCCounts", (double) counts);
+    }
+  }
 }

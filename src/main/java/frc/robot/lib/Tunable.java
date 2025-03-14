@@ -1,5 +1,9 @@
 package frc.robot.lib;
 
+import com.ctre.phoenix6.configs.MotionMagicConfigs;
+import com.ctre.phoenix6.configs.Slot0Configs;
+import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.hardware.TalonFXS;
 import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.SparkMaxConfig;
@@ -438,6 +442,226 @@ public final class Tunable {
         v ->
             value.setConstraints(
                 new TrapezoidProfile.Constraints(value.getConstraints().maxVelocity, v)));
+  }
+
+  /** Makes bound {@link TalonFX} controller at closed loop slot 0 tunable.. */
+  public static void bind(String name, TalonFX talonFX) {
+    final var config = new Slot0Configs();
+    talonFX.getConfigurator().refresh(config);
+
+    value(
+        name + "/kP",
+        config.kP,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kP = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kI",
+        config.kI,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kI = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kD",
+        config.kD,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kD = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kS",
+        config.kS,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kS = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kV",
+        config.kV,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kV = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kA",
+        config.kA,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kA = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kG",
+        config.kG,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.kG = v;
+          talonFX.getConfigurator().apply(config);
+        });
+  }
+
+  /** Makes bound {@link TalonFX} controller Motion Magic tunable. */
+  public static void bindMotionProfile(String name, TalonFX talonFX) {
+    final var config = new MotionMagicConfigs();
+    talonFX.getConfigurator().refresh(config);
+
+    value(
+        name + "/Velocity",
+        config.MotionMagicCruiseVelocity,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.MotionMagicCruiseVelocity = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Acceleration",
+        config.MotionMagicAcceleration,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.MotionMagicAcceleration = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Jerk",
+        config.MotionMagicJerk,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.MotionMagicJerk = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Expo kV",
+        config.MotionMagicExpo_kV,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.MotionMagicExpo_kV = v;
+          talonFX.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Expo kA",
+        config.MotionMagicExpo_kA,
+        v -> {
+          talonFX.getConfigurator().refresh(config);
+          config.MotionMagicExpo_kA = v;
+          talonFX.getConfigurator().apply(config);
+        });
+  }
+
+  /** Makes bound {@link TalonFXS} controller at closed loop slot 0 tunable.. */
+  public static void bind(String name, TalonFXS talonFXS) {
+    final var config = new Slot0Configs();
+    talonFXS.getConfigurator().refresh(config);
+
+    value(
+        name + "/kP",
+        config.kP,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kP = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kI",
+        config.kI,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kI = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kD",
+        config.kD,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kD = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kS",
+        config.kS,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kS = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kV",
+        config.kV,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kV = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kA",
+        config.kA,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kA = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/kG",
+        config.kG,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.kG = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+  }
+
+  /** Makes bound {@link TalonFXS} controller Motion Magic tunable. */
+  public static void bindMotionProfile(String name, TalonFXS talonFXS) {
+    final var config = new MotionMagicConfigs();
+    talonFXS.getConfigurator().refresh(config);
+
+    value(
+        name + "/Velocity",
+        config.MotionMagicCruiseVelocity,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.MotionMagicCruiseVelocity = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Acceleration",
+        config.MotionMagicAcceleration,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.MotionMagicAcceleration = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Jerk",
+        config.MotionMagicJerk,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.MotionMagicJerk = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Expo kV",
+        config.MotionMagicExpo_kV,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.MotionMagicExpo_kV = v;
+          talonFXS.getConfigurator().apply(config);
+        });
+    value(
+        name + "/Expo kA",
+        config.MotionMagicExpo_kA,
+        v -> {
+          talonFXS.getConfigurator().refresh(config);
+          config.MotionMagicExpo_kA = v;
+          talonFXS.getConfigurator().apply(config);
+        });
   }
 
   /** Makes bound {@link SparkMax} controller at closed loop slot 0 tunable. */

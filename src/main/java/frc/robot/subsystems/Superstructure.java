@@ -313,6 +313,12 @@ public final class Superstructure extends SubsystemBase {
 
   @Override
   public void periodic() {
+    if (kOverrideEnabled.get()) {
+      pivot.setAngle(kOverrideAngle.get());
+      elevator.setPosition(kOverrideHeight.get());
+      return;
+    }
+
     final var setpoint = getSetpoint();
 
     // safety: do not move elevator if the pivot is beyond critical (transition) angle
@@ -442,6 +448,10 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kTransitionAlgaeAngle = profileValue("TransitionAlgaeAngle", __kTransitionAlgaeAngle);
   private static Tunable.DoubleValue kStowedAlgaeAngle = profileValue("StowedAlgaeAngle", __kStowedAlgaeAngle);
   private static Tunable.DoubleValue kEjectAlgaeAngle = profileValue("EjectAlgaeAngle", __kEjectAlgaeAngle);
+
+  private static Tunable.DoubleValue kOverrideHeight = profileValue("Override/Height", 0);
+  private static Tunable.DoubleValue kOverrideAngle = profileValue("Override/Angle", 0);
+  private static Tunable.BooleanValue kOverrideEnabled = Tunable.value("Superstructure/Override/Enabled", false);
   // spotless:on
 
   static {

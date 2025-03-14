@@ -3,6 +3,10 @@ package frc.robot.lib;
 import edu.wpi.first.math.geometry.Pose2d;
 
 public class VisionState {
+  /** Empty vision state. */
+  public static final VisionState empty =
+      new VisionState(new TimestampedValue<>(-1, Pose2d.kZero), new TimestampedTranslation2d[0]);
+
   /** Robot's pose in the field frame of reference */
   public final TimestampedValue<Pose2d> pose;
 

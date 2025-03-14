@@ -18,7 +18,7 @@ public final class Climb extends SubsystemBase {
   // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
   private static final double __kArmP = 0.05;
   private static final double __kArmD = 0;
-  private static final double __kWinchP = 0.02;
+  private static final double __kWinchP = 0.15;
   private static final double __kWinchD = 0;
 
   private static final double conversionFactorArm = 360 / 100; // to degrees, 100:1 reduction ratio
@@ -72,7 +72,7 @@ public final class Climb extends SubsystemBase {
             winchCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(30)
+                  .smartCurrentLimit(60)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kBrake)
                   .inverted(true);
@@ -97,6 +97,8 @@ public final class Climb extends SubsystemBase {
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Climb/Arm", motorArm, ClosedLoopSlot.kSlot0);
     Tunable.bind("Climb/Winch", motorWinch, ClosedLoopSlot.kSlot0);
+
+    reset();
   }
 
   @Override

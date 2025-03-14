@@ -19,6 +19,10 @@ import java.util.function.Supplier;
  * https://github.com/Greater-Rochester-Robotics/Reefscape2025-340/blob/main/src/main/java/org/team340/lib/util/vendors/RevUtil.java
  */
 public final class RevUtil {
+  private RevUtil() {
+    throw new AssertionError();
+  }
+
   /**
    * Configures a Spark motor controller with error checking and a default state reset. Uses {@link
    * ResetMode#kResetSafeParameters} and {@link PersistMode#kPersistParameters}.
@@ -147,8 +151,8 @@ public final class RevUtil {
   public static boolean run(
       String name, SparkLowLevel device, Supplier<REVLibError> target, int maxTries) {
     String results = "";
-    for (int i = 0; i < maxTries; i++) {
-      final REVLibError result = target.get();
+    for (var i = 0; i < maxTries; ++i) {
+      final var result = target.get();
       if (result.equals(REVLibError.kOk)) return true;
       results += (results.isEmpty() ? "" : ", ") + result.name();
     }

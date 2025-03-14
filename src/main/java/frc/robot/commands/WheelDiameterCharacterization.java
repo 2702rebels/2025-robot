@@ -21,8 +21,8 @@ public class WheelDiameterCharacterization extends Command {
   private static final Tunable.DoubleValue omega =
       Tunable.value("WheelDiameterCharacterization/Omega", 0.3);
 
-  private static final double turnRadius = TunerConstants.turnRadius().in(Meters);
-  private static final double wheelRadius = TunerConstants.wheelRadius().in(Meters);
+  private static final double turnRadius = TunerConstants.turnRadius.in(Meters);
+  private static final double wheelRadius = TunerConstants.wheelRadius.in(Meters);
 
   private final CommandSwerveDrivetrain drivetrain;
   private final SwerveRequest.RobotCentric driveRequest = new SwerveRequest.RobotCentric();

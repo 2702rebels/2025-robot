@@ -9,6 +9,7 @@ import com.ctre.phoenix6.signals.*;
 import com.ctre.phoenix6.swerve.*;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants.*;
 import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.units.measure.*;
@@ -34,7 +35,8 @@ public class TunerConstants {
   // When using closed-loop control, the drive motor uses the control
   // output type specified by SwerveModuleConstants.DriveMotorClosedLoopOutput
   private static final Slot0Configs driveGains =
-      new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
+      // FOC: new Slot0Configs().withKP(6).withKI(0).withKD(0).withKS(4.2).withKV(0).withKA(0.5);
+      new Slot0Configs().withKP(0.16).withKI(0).withKD(0).withKS(0.1).withKV(0.124).withKA(0.01);
 
   // The closed-loop output type to use for the steer motors;
   // This affects the PID/FF gains for the steer motors
@@ -58,7 +60,7 @@ public class TunerConstants {
 
   // The stator current at which the wheels start to slip;
   // This needs to be tuned to your individual robot
-  private static final Current kSlipCurrent = Amps.of(120.0);
+  private static final Current kSlipCurrent = Amps.of(80.0);
 
   // Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
   // Some configs will be overwritten; check the `with*InitialConfigs()` API documentation.
@@ -245,15 +247,19 @@ public class TunerConstants {
         DrivetrainConstants, FrontLeft, FrontRight, BackLeft, BackRight);
   }
 
-  /** Returns wheel radius. */
-  public static Distance wheelRadius() {
-    return kWheelRadius;
-  }
+  /** Translation vectors of module positions relative to the center of the robot. */
+  public static final Translation2d[] modulePositions = {
+    new Translation2d(kFrontLeftXPos.in(Meters), kFrontLeftYPos.in(Meters)),
+    new Translation2d(kFrontRightXPos.in(Meters), kFrontRightYPos.in(Meters)),
+    new Translation2d(kBackLeftXPos.in(Meters), kBackLeftYPos.in(Meters)),
+    new Translation2d(kBackRightXPos.in(Meters), kBackRightYPos.in(Meters)),
+  };
 
-  /** Returns turning radius. */
-  public static Distance turnRadius() {
-    return Meters.of(Math.hypot(kFrontLeftXPos.in(Meters), kFrontLeftYPos.in(Meters)));
-  }
+  /** Wheel radius. */
+  public static Distance wheelRadius = kWheelRadius;
+
+  /** Turning radius (assumes square robot configuration). */
+  public static Distance turnRadius = Meters.of(modulePositions[0].getNorm());
 
   /** Swerve Drive class utilizing CTR Electronics' Phoenix 6 API with the selected device types. */
   public static class TunerSwerveDrivetrain extends SwerveDrivetrain<TalonFX, TalonFXS, TalonFXS> {

@@ -15,8 +15,11 @@ public final class Constants {
     /** Logging */
     public static final boolean loggingEnabled = true;
 
+    /** Logging timing stats */
+    public static final boolean statsEnabled = true;
+
     /** SysId bindings */
-    public static final boolean sysIdBindings = false;
+    public static final boolean sysIdBindings = true;
 
     /** Driving disabled */
     public static final boolean drivingDisabled = false;
@@ -38,14 +41,18 @@ public final class Constants {
 
   /** RoboRIO CAN identifiers */
   public static final class CanID {
-    public static final int MOTOR_ELEVATOR_LEADER = 10;
-    public static final int MOTOR_ELEVATOR_FOLLOWER = 11;
     public static final int MOTOR_PIVOT_LEADER = 13;
     public static final int MOTOR_PIVOT_FOLLOWER = 12;
     public static final int MOTOR_MANIPULATOR_CORAL = 14;
     public static final int MOTOR_MANIPULATOR_GUIDE = 15;
     public static final int MOTOR_CLIMB_WINCH = 16;
     public static final int MOTOR_CLIMB_ARM = 17;
+  }
+
+  /** CANivore identifiers */
+  public static final class CanivoreID {
+    public static final int MOTOR_ELEVATOR_LEADER = 15;
+    public static final int MOTOR_ELEVATOR_FOLLOWER = 16;
   }
 
   public static final class RevConstants {
@@ -106,7 +113,7 @@ public final class Constants {
     /** PID configuration for path following controllers */
     public static final class PathFollowing {
       /** kP used for the translation PID drive controllers */
-      public static final double translationKp = 10;
+      public static final double translationKp = 0.4;
 
       /** kI used for the translation PID drive controllers */
       public static final double translationKi = 0;
@@ -115,7 +122,7 @@ public final class Constants {
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 7;
+      public static final double rotationKp = 0.4;
 
       /** kI used for the rotation PID drive controllers */
       public static final double rotationKi = 0;

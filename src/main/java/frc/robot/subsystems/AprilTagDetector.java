@@ -27,8 +27,9 @@ public class AprilTagDetector {
   private final AprilTagPose[] tags = new AprilTagPose[22]; // 22 april tags locations
   private VisionPose pose = new VisionPose();
 
-  private static final TimestampedValue<Pose2d> noPose = new TimestampedValue<>(-1, null);
-  private static final TimestampedTranslation2d noTag = new TimestampedTranslation2d(-1, null);
+  private static final TimestampedValue<Pose2d> noPose = new TimestampedValue<>(-1, Pose2d.kZero);
+  private static final TimestampedTranslation2d noTag =
+      new TimestampedTranslation2d(-1, Translation2d.kZero);
 
   public AprilTagDetector() {
     listener =
@@ -52,8 +53,8 @@ public class AprilTagDetector {
 
     lock.lock();
     try {
-      // pose can be trusted
-      if ((packet.flags & 0x1) != 0) {
+      // bit 1 indicates that pose can be trusted
+      if ((packet.flags & 0x1) != 0 && packet.timestamp > pose.timestamp) {
         pose.timestamp = packet.timestamp;
         pose.x = Units.inchesToMeters(packet.x);
         pose.y = Units.inchesToMeters(packet.y);
