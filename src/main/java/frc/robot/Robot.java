@@ -38,7 +38,7 @@ public class Robot extends TimedRobot {
   public Robot() {
     robotState = RobotState.getInstance();
     vision = Vision.getInstance();
-    robotContainer = new RobotContainer(robotState);
+    robotContainer = new RobotContainer();
 
     if (Constants.Settings.loggingEnabled) {
       DataLogManager.start(); // required for Epilogue data to be logged to disk

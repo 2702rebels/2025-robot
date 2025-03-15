@@ -6,6 +6,7 @@ import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.util.Units;
@@ -26,10 +27,13 @@ import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.ReefState;
 import frc.robot.lib.TimestampedCircularBuffer;
+import frc.robot.lib.TimestampedTranslation2d;
 import frc.robot.lib.Tunable;
 import frc.robot.lib.VisionState;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -41,10 +45,9 @@ public class RobotState {
     return instance;
   }
 
-  private static final int RP_CORALS_PER_LEVEL = 5;
-  private static final int CORALS_PER_LEVEL = 12;
-
-  private static final long kVisionCutoff = 50;
+  private static final int kCoralsPerLevelForRP = 5;
+  private static final int kCoralsPerLevel = 12;
+  private static final long kVisionCutoff = 60 * 1000; // microseconds
 
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
 
@@ -58,8 +61,14 @@ public class RobotState {
   // external vision state supplier
   private Supplier<VisionState> visionStateSupplier;
 
+  // external object detection supplier
+  private Supplier<TimestampedTranslation2d> detectedObjectSupplier;
+
   // external drive state supplier
   private Supplier<SwerveDriveState> driveStateSupplier;
+
+  // external odometry pose reset
+  private Consumer<Pose2d> odometryPoseReset;
 
   /*
    * ReefState to use with Reef widgets
@@ -80,8 +89,14 @@ public class RobotState {
 
   private final SendableChooser<ScoringStrategy> scoringStrategyChooser = new SendableChooser<>();
 
-  private final double robotSpeedTolerance = 0.01; // 1 cm/sec
-  private final double robotOmegaTolerance = Units.degreesToRadians(5); // 1 deg/sec
+  private static final double kStationarySpeedTolerance = 0.05; // 5 cm/sec
+  private static final double kStationaryOmegaTolerance = Units.degreesToRadians(5); // 5 deg/sec
+  private static final double kSlowSpeedTolerance = 1; // 1.0 m/sec
+  private static final double kSlowOmegaTolerance = Units.degreesToRadians(60); // 60 deg/sec
+  private static final double kRobotSlipThreshold = 0.3;
+  private static final double kOdometryTrustThreshold = 0.5;
+  private static final double kScoringPositionRotationTolerance = 5; // degrees
+  private static final double kScoringPositionTranslationTolerance = Units.inchesToMeters(2);
 
   private RobotState() {
     reefState = new ReefState();
@@ -120,6 +135,15 @@ public class RobotState {
     /** Score coral at L1 */
     CORAL_SCORE_L1,
 
+    /** Score coral at L2 */
+    CORAL_SCORE_L2,
+
+    /** Score coral at L3 */
+    CORAL_SCORE_L3,
+
+    /** Score coral at L4 */
+    CORAL_SCORE_L4,
+
     /** Score coral at L2, L3, L4 per reef scoring strategy */
     CORAL_SCORE_AUTO,
 
@@ -137,6 +161,41 @@ public class RobotState {
 
     /** Eject algae into the processor */
     ALGAE_EJECT,
+  }
+
+  public static enum GameState {
+    IDLE,
+
+    /** Scoring coral sequence active */
+    SCORING_CORAL,
+
+    /** Scoring algae sequence active */
+    SCORING_ALGAE,
+
+    /** Intaking coral sequence active */
+    INTAKING_CORAL,
+
+    /** Intaking algae sequence active */
+    INTAKING_ALGAE,
+
+    /** Holding coral and taxing */
+    HOLDING_CORAL,
+
+    /** Holding algae and taxing */
+    HOLDING_ALGAE,
+
+    /** Climbing sequence active */
+    CLIMBING
+  }
+
+  public static enum LocalizationState {
+    NONE,
+
+    /** Vision targets recently acquired, pose can be trusted */
+    TRUSTED,
+
+    /** No recent vision updates, pose cannot be trusted */
+    UNTRUSTED,
   }
 
   public static enum ScoringStrategy {
@@ -157,6 +216,14 @@ public class RobotState {
   /** Robot intent */
   @Logged(name = "Intent", importance = Importance.INFO)
   public Intent intent = Intent.NONE;
+
+  /** Robot game state */
+  @Logged(name = "GameState", importance = Importance.INFO)
+  public GameState gameState = GameState.IDLE;
+
+  /** Robot localization state */
+  @Logged(name = "LocalizationState", importance = Importance.INFO)
+  public LocalizationState localizationState = LocalizationState.NONE;
 
   /** Reef state (robot side) */
   public final ReefState reefState;
@@ -183,17 +250,14 @@ public class RobotState {
   @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
   public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.CORAL_SCORE_L1);
 
-  @Logged(name = "ShouldScoreCoralL23", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL23 = new Trigger(() -> {
-    if (intent == Intent.CORAL_SCORE_AUTO) {
-      final var level = getScoreLevel();
-      return level == 2 || level == 3;
-    }
-    return false;
-  });
+  @Logged(name = "ShouldScoreCoralL2", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL2 = new Trigger(() -> intent == Intent.CORAL_SCORE_L2);
+
+  @Logged(name = "ShouldScoreCoralL3", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL3 = new Trigger(() -> intent == Intent.CORAL_SCORE_L3);
 
   @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.CORAL_SCORE_AUTO && getScoreLevel() == 4);
+  public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.CORAL_SCORE_L4);
 
   @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
   public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L2);
@@ -214,9 +278,13 @@ public class RobotState {
   private Pose2d robotPose = Pose2d.kZero;
   private Pose2d odometryPose = Pose2d.kZero;
   private Pose2d visionPose = Pose2d.kZero;
+  private Pose2d coralPose = Pose2d.kZero;
+
   private long visionPoseTimestamp = -1;
-  private double odometryWeight = 1;
-  private double visionWeight = 0;
+  private long coralPoseTimestamp = -1;
+
+  @Logged(name = "OdometryTrust", importance = Importance.INFO)
+  private double odometryTrust = 0; // no trust initially
 
   @Logged(name = "RobotPose", importance = Importance.INFO)
   public Pose2d getRobotPose() {
@@ -233,10 +301,22 @@ public class RobotState {
     return visionPose;
   }
 
-  @Logged(name = "VisionPoseAge", importance = Importance.DEBUG)
+  @Logged(name = "VisionPoseAgeMS", importance = Importance.DEBUG)
   public double getVisionPoseAge() {
     return visionPoseTimestamp > 0
-        ? (RobotController.getFPGATime() - visionPoseTimestamp) / 1000000.0
+        ? (RobotController.getFPGATime() - visionPoseTimestamp) / 1000.0
+        : -1;
+  }
+
+  @Logged(name = "CoralPose", importance = Importance.INFO)
+  public Pose2d getCoralPose() {
+    return coralPose;
+  }
+
+  @Logged(name = "CoralPoseAgeMS", importance = Importance.DEBUG)
+  public double getCoralPoseAge() {
+    return coralPoseTimestamp > 0
+        ? (RobotController.getFPGATime() - coralPoseTimestamp) / 1000.0
         : -1;
   }
 
@@ -244,6 +324,9 @@ public class RobotState {
   public Pose2d getScoringPoseDebug() {
     return scoringPose.isPresent() ? scoringPose.get() : null;
   }
+
+  // indicator of automatic scoring mode
+  private boolean auto;
 
   /** Target pose to supply to driveToPose command */
   private Optional<Pose2d> targetPose = Optional.empty();
@@ -257,7 +340,11 @@ public class RobotState {
 
   /** Trigger for scoring readiness */
   @Logged(name = "ScoringReady", importance = Importance.INFO)
-  public final Trigger scoringReady = new Trigger(() -> !visionScoring.get() || isAtScoringPose());
+  public final Trigger scoringReady = new Trigger(() -> !visionAssist.get() || isAtScoringPose());
+
+  /** Trigger for auto scoring mode */
+  @Logged(name = "Auto", importance = Importance.INFO)
+  public final Trigger isAuto = new Trigger(() -> auto);
 
   /** Binds external historical pose supplier. */
   public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
@@ -269,25 +356,34 @@ public class RobotState {
     visionStateSupplier = value;
   }
 
+  /** Binds external object detection supplier. */
+  public void setDetectedObjectSupplier(Supplier<TimestampedTranslation2d> value) {
+    detectedObjectSupplier = value;
+  }
+
   /** Binds external drive state supplier. */
   public void setDriveStateSupplier(Supplier<SwerveDriveState> value) {
     driveStateSupplier = value;
   }
 
+  /** Binds external odometry pose reset. */
+  public void setOdometryPoseReset(Consumer<Pose2d> value) {
+    odometryPoseReset = value;
+  }
+
   /** Gets the score level for automatic scoring (1..4) */
   public int getScoreLevel() {
-    if (DriverStation.isAutonomous() && DriverStation.isAutonomousEnabled()) {
-      return 4;
-    }
-
     return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
   }
 
   public Command setIntent(Intent intent) {
     return Commands.runOnce(
             () -> {
-              if (intent == Intent.CORAL_SCORE_AUTO && visionScoring.get()) {
+              if (intent == Intent.CORAL_SCORE_AUTO
+                  && visionAssist.get()
+                  && localizationState == LocalizationState.TRUSTED) {
                 scoringPose = getClosestScoringPose(robotPose);
+                auto = true;
 
                 // do not set intent since we are trying to score via vision
                 // and no target is available
@@ -296,12 +392,54 @@ public class RobotState {
                 }
               }
 
+              var actualIntent = intent;
+              if (intent == Intent.CORAL_SCORE_AUTO) {
+                switch (getScoreLevel()) {
+                  case 1:
+                    actualIntent = Intent.CORAL_SCORE_L1;
+                    break;
+                  case 2:
+                    actualIntent = Intent.CORAL_SCORE_L2;
+                    break;
+                  case 3:
+                    actualIntent = Intent.CORAL_SCORE_L3;
+                    break;
+                  case 4:
+                    actualIntent = Intent.CORAL_SCORE_L4;
+                    break;
+                }
+              } else
               // reset scoring pose when intent is removed
               if (intent != Intent.CORAL_SCORE_AUTO) {
                 scoringPose = Optional.empty();
+                auto = false;
               }
 
-              this.intent = intent;
+              switch (actualIntent) {
+                case CORAL_SCORE_L1:
+                case CORAL_SCORE_L2:
+                case CORAL_SCORE_L3:
+                case CORAL_SCORE_L4:
+                  gameState = GameState.SCORING_CORAL;
+                  break;
+                case CORAL_FLOOR_INTAKE:
+                case CORAL_STATION_INTAKE:
+                  gameState = GameState.INTAKING_CORAL;
+                  break;
+                case ALGAE_SCORE_NET:
+                case ALGAE_EJECT:
+                  gameState = GameState.SCORING_ALGAE;
+                  break;
+                case ALGAE_INTAKE_L2:
+                case ALGAE_INTAKE_L3:
+                  gameState = GameState.INTAKING_ALGAE;
+                  break;
+                default:
+                  gameState = GameState.IDLE;
+                  break;
+              }
+
+              this.intent = actualIntent;
             })
         .withName("SetIntent");
   }
@@ -326,8 +464,7 @@ public class RobotState {
       final var r =
           Math.abs(_scoringPose.getRotation().getDegrees() - robotPose.getRotation().getDegrees());
 
-      // THESE ARE HARDCODED RIGHT NOW
-      return d < Units.inchesToMeters(2) && r < 5;
+      return d < kScoringPositionRotationTolerance && r < kScoringPositionRotationTolerance;
     }
 
     return false;
@@ -335,6 +472,10 @@ public class RobotState {
 
   public Command resetScoringPose() {
     return new InstantCommand(() -> scoringPose = Optional.empty());
+  }
+
+  public Command resetAuto() {
+    return new InstantCommand(() -> auto = false);
   }
 
   /** Synchronizes operator's input with the robot's perspective. */
@@ -362,6 +503,16 @@ public class RobotState {
     }
   }
 
+  // maintains most recent module slip ratios (to avoid allocations)
+  private final double[] moduleSlipRatios = new double[4];
+
+  /** Resets odometry pose and restores trust. */
+  private void resetOdometryPose(Pose2d pose) {
+    odometryTrust = 1;
+    odometryPose = pose;
+    odometryPoseReset.accept(pose);
+  }
+
   /**
    * Runs logic at the beginning of the periodic cycle.
    *
@@ -374,22 +525,36 @@ public class RobotState {
 
     pollReefState();
 
-    boolean isRobotStationary = true;
+    boolean isRobotStationary = false;
+    boolean isRobotSlow = false;
 
     // poll odometry
     if (driveStateSupplier != null) {
       final var driveState = driveStateSupplier.get();
-      robotPose = driveState.Pose;
+      odometryPose = driveState.Pose;
 
       final var rotation = robotPose.getRotation();
       final var robotSpeeds = driveState.Speeds;
       final var fieldSpeeds = ChassisSpeeds.fromRobotRelativeSpeeds(robotSpeeds, rotation);
       chassisSpeeds.enqueue(timestamp, fieldSpeeds);
 
+      Telemetry.computeSlipRatios(driveState, moduleSlipRatios);
+
+      // reduce trust in odometry if slippage is detected
+      final var maxSlipRatio = Arrays.stream(moduleSlipRatios).map(Math::abs).max().getAsDouble();
+      if (maxSlipRatio > kRobotSlipThreshold) {
+        odometryTrust = Math.max(0, odometryTrust - 0.05);
+      }
+
       isRobotStationary =
-          MathUtil.isNear(0, robotSpeeds.vxMetersPerSecond, robotSpeedTolerance)
-              && MathUtil.isNear(0, robotSpeeds.vyMetersPerSecond, robotSpeedTolerance)
-              && MathUtil.isNear(0, robotSpeeds.omegaRadiansPerSecond, robotOmegaTolerance);
+          MathUtil.isNear(0, robotSpeeds.vxMetersPerSecond, kStationarySpeedTolerance)
+              && MathUtil.isNear(0, robotSpeeds.vyMetersPerSecond, kStationarySpeedTolerance)
+              && MathUtil.isNear(0, robotSpeeds.omegaRadiansPerSecond, kStationaryOmegaTolerance);
+
+      isRobotSlow =
+          MathUtil.isNear(0, robotSpeeds.vxMetersPerSecond, kSlowSpeedTolerance)
+              && MathUtil.isNear(0, robotSpeeds.vyMetersPerSecond, kSlowSpeedTolerance)
+              && MathUtil.isNear(0, robotSpeeds.omegaRadiansPerSecond, kSlowOmegaTolerance);
     }
 
     // poll vision state
@@ -402,20 +567,48 @@ public class RobotState {
         visionPose = visionState.pose.value();
 
         // special handling of the very first vision update:
-        // if the robot is stationary set (fused) robot pose to the vision pose
+        // if the robot is stationary set odometry pose to the vision pose
         if (visionPoseTimestamp <= 0 && isRobotStationary) {
-          robotPose = visionPose;
+          resetOdometryPose(visionPose);
         }
 
         visionPoseTimestamp = newVisionPoseTimestamp;
       }
     }
 
-    // compute fused robot state from vision and odometry
+    // compute fused robot pose from vision and odometry
     if (visionPoseTimestamp > 0 && visionPoseTimestamp > timestamp - kVisionCutoff) {
-      robotPose = visionPose;
+      // reset robot pose to vision pose when moving slowly and odometry is not trusted
+      if (isRobotSlow && odometryTrust < kOdometryTrustThreshold) {
+        resetOdometryPose(visionPose);
+        robotPose = visionPose;
+      } else {
+        robotPose = visionPose.interpolate(odometryPose, odometryTrust);
+      }
+
+      localizationState = LocalizationState.TRUSTED;
     } else {
       robotPose = odometryPose;
+      localizationState =
+          odometryTrust < kOdometryTrustThreshold
+              ? LocalizationState.UNTRUSTED
+              : LocalizationState.TRUSTED;
+    }
+
+    // poll detected objects
+    if (detectedObjectSupplier != null) {
+      final var detectedObject = detectedObjectSupplier.get();
+      final var newDetectedObjectTimestamp = detectedObject.timestamp();
+      if (newDetectedObjectTimestamp > coralPoseTimestamp) {
+        final var vectorToCoral = detectedObject.value();
+
+        // determine pose of the coral based on the robot pose and heading
+        coralPoseTimestamp = newDetectedObjectTimestamp;
+        coralPose =
+            new Pose2d(
+                robotPose.getTranslation().plus(vectorToCoral.rotateBy(robotPose.getRotation())),
+                Rotation2d.kZero);
+      }
     }
 
     scoringStrategy = scoringStrategyChooser.getSelected();
@@ -434,11 +627,11 @@ public class RobotState {
       var targetLevel = -1;
 
       if (effectiveScoringStrategy == ScoringStrategy.RP) {
-        if (reefState.coralsL4.cardinality() < RP_CORALS_PER_LEVEL) {
+        if (reefState.coralsL4.cardinality() < kCoralsPerLevelForRP) {
           targetLevel = 3;
-        } else if (reefState.coralsL3.cardinality() < RP_CORALS_PER_LEVEL) {
+        } else if (reefState.coralsL3.cardinality() < kCoralsPerLevelForRP) {
           targetLevel = 2;
-        } else if (reefState.coralsL2.cardinality() < RP_CORALS_PER_LEVEL) {
+        } else if (reefState.coralsL2.cardinality() < kCoralsPerLevelForRP) {
           targetLevel = 1;
         }
       }
@@ -446,11 +639,11 @@ public class RobotState {
       // if target level is not set with RP strategy above, it means that we think
       // RP has been achieved, so we should focus on scoring
       if (effectiveScoringStrategy == ScoringStrategy.SCORE || targetLevel < 0) {
-        if (reefState.coralsL4.cardinality() < CORALS_PER_LEVEL) {
+        if (reefState.coralsL4.cardinality() < kCoralsPerLevel) {
           targetLevel = 3;
-        } else if (reefState.coralsL3.cardinality() < CORALS_PER_LEVEL) {
+        } else if (reefState.coralsL3.cardinality() < kCoralsPerLevel) {
           targetLevel = 2;
-        } else if (reefState.coralsL2.cardinality() < CORALS_PER_LEVEL) {
+        } else if (reefState.coralsL2.cardinality() < kCoralsPerLevel) {
           targetLevel = 1;
         } else {
           targetLevel = 0;
@@ -468,7 +661,7 @@ public class RobotState {
     }
   }
 
-  /** Gets the closest scoring pose based on the closes reef faces if applicable. */
+  /** Gets the closest scoring pose based on the closest reef faces. */
   public Optional<Pose2d> getClosestScoringPose(Pose2d robotPose) {
     final var scoringLevel = getScoreLevel();
     final var scoringPoses =
@@ -504,10 +697,10 @@ public class RobotState {
     Pose2d currentPose = null;
     double distance = -1;
 
-    final var position1a = getScoringPosition(scoringLevel, face1 * 2, scoringPoses, robotXY);
-    final var position1b = getScoringPosition(scoringLevel, face1 * 2 + 1, scoringPoses, robotXY);
-    final var position2a = getScoringPosition(scoringLevel, face2 * 2, scoringPoses, robotXY);
-    final var position2b = getScoringPosition(scoringLevel, face2 * 2 + 1, scoringPoses, robotXY);
+    final var position1a = getScoringPosition(face1 * 2, scoringPoses, robotXY, scoringLevel);
+    final var position1b = getScoringPosition(face1 * 2 + 1, scoringPoses, robotXY, scoringLevel);
+    final var position2a = getScoringPosition(face2 * 2, scoringPoses, robotXY, scoringLevel);
+    final var position2b = getScoringPosition(face2 * 2 + 1, scoringPoses, robotXY, scoringLevel);
 
     if (position1a.isPresent()) {
       currentPose = position1a.get().getFirst();
@@ -532,14 +725,24 @@ public class RobotState {
     return Optional.ofNullable(currentPose);
   }
 
+  /** Returns indexed scoring position from a list of poses and the distance to it. */
   private Optional<Pair<Pose2d, Double>> getScoringPosition(
-      int level, int index, Pose2d[] poses, Translation2d robotXY) {
+      int index, Pose2d[] poses, Translation2d robotXY) {
+    final var pose = FieldConstants.fieldPose.apply(poses[index]);
+    return Optional.of(Pair.of(pose, robotXY.getDistance(pose.getTranslation())));
+  }
+
+  /**
+   * Returns indexed scoring position from a list of poses and the distance to it but only if it is
+   * not marked as scored at the specified level.
+   */
+  private Optional<Pair<Pose2d, Double>> getScoringPosition(
+      int index, Pose2d[] poses, Translation2d robotXY, int level) {
     if (reefState.isPositionScored(level, index)) {
       return Optional.empty();
     }
 
-    final var pose = FieldConstants.fieldPose.apply(poses[index]);
-    return Optional.of(Pair.of(pose, robotXY.getDistance(pose.getTranslation())));
+    return getScoringPosition(index, poses, robotXY);
   }
 
   /**
@@ -561,11 +764,11 @@ public class RobotState {
     return chassisSpeeds.findAt(timestamp);
   }
 
-  /** Returns observed pose at the specified timestamp. */
-  public Optional<Pose2d> getPoseAt(long timestamp) {
+  /** Returns observed odometry pose at the specified timestamp. */
+  public Optional<Pose2d> getOdometryPoseAt(long timestamp) {
     return historicalPoseSupplier.apply(timestamp);
   }
 
-  public static final Tunable.BooleanValue visionScoring =
-      Tunable.value("Control/VisionScoring", true);
+  public static final Tunable.BooleanValue visionAssist =
+      Tunable.value("Control/VisionAssist", true);
 }

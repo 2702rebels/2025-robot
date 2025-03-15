@@ -15,8 +15,8 @@ import edu.wpi.first.units.measure.Current;
  * drivetrain when using TorqueCurrentFOC mode.
  */
 public class SysIdSwerveTranslationTorqueCurrent implements SwerveRequest {
-  /** Torque current to apply to drive wheels. */
-  public double torqueCurrentToApply = 0;
+  /** Torque current to apply to drive wheels */
+  private double torqueCurrentToApply = 0;
 
   /** Local reference to a torque current request for the drive motors */
   private final TorqueCurrentFOC driveRequest = new TorqueCurrentFOC(0);

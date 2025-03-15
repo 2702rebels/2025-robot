@@ -83,7 +83,7 @@ public final class Constants {
     public static final LinearAcceleration maxAcceleration = maxSpeed.div(Seconds.of(0.5));
 
     /** Maximum angular velocity */
-    public static final AngularVelocity maxAngularRate = RotationsPerSecond.of(0.8);
+    public static final AngularVelocity maxAngularRate = RotationsPerSecond.of(1);
 
     /** Maximum angular acceleration */
     public static final AngularAcceleration maxAngularAcceleration =
@@ -95,7 +95,7 @@ public final class Constants {
       public static final double translationKp = 2;
 
       /** kI used for the translation PID drive controllers */
-      public static final double translationKi = 0.01;
+      public static final double translationKi = 0;
 
       /** kD used for the translation PID drive controllers */
       public static final double translationKd = 0;
@@ -104,7 +104,7 @@ public final class Constants {
       public static final double rotationKp = 3.5;
 
       /** kI used for the rotation PID drive controllers */
-      public static final double rotationKi = 0.01;
+      public static final double rotationKi = 0;
 
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;

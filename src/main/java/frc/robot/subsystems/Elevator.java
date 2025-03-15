@@ -25,11 +25,25 @@ public class Elevator extends SubsystemBase {
   private static final double __kG0 = 0;
   private static final double __kG1 = 0.3;
   private static final double __kV = 0.075;
-  private static final double __kMaxVelocity = 0; // rotations/sec
-  private static final double __kMaxAcceleration = 300; // rotations/sec.sq
+  private static final double __kMaxVelocity = 100; // rps
+  private static final double __kMaxAcceleration = 0; // rps/s
   private static final double __kJerk = 0;
+
+  // Expo kV and kA characterize the profile not gains
+  // https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/device-specific/talonfx/motion-magic.html#motion-magic-expo
+  //
+  // max velocity (rps) = min(supply voltage / kV, cruise velocity)
+  // max acceleration (rps/s) = supply voltage / kA
+  //
+  // For example,
+  // kV = 0.03 at 12V -> max velocity = 400 rps
+  // kA = 0.04 at 12V -> max acceleration = 300 rps/s
+  //
+  // SMALLER VALUES REPRESENT HIGHER MAX VELOCITY / ACCELERATION
   private static final double __kVExpo = 0.03;
   private static final double __kAExpo = 0.04;
+
+  private static final double kStatorCurrentLimit = 60;
 
   // conversion factor between rotation and linear movement
   // 3" wheel diameter, 8:1 reduction ratio
@@ -39,7 +53,7 @@ public class Elevator extends SubsystemBase {
   private static final double maxTravel = 66;
 
   // tolerance (inches)
-  private static final double tolerance = 1;
+  private static final double tolerance = 0.5;
 
   @Logged(name = "Setpoint", importance = Importance.INFO)
   private double setpoint;
@@ -59,7 +73,7 @@ public class Elevator extends SubsystemBase {
             leaderCanID,
             canbus,
             (config) -> {
-              config.CurrentLimits.StatorCurrentLimit = 60;
+              config.CurrentLimits.StatorCurrentLimit = kStatorCurrentLimit;
               config.CurrentLimits.StatorCurrentLimitEnable = true;
               config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
               config.Commutation.AdvancedHallSupport = AdvancedHallSupportValue.Enabled;
@@ -82,7 +96,7 @@ public class Elevator extends SubsystemBase {
             followerCanID,
             canbus,
             (config) -> {
-              config.CurrentLimits.StatorCurrentLimit = 60;
+              config.CurrentLimits.StatorCurrentLimit = kStatorCurrentLimit;
               config.CurrentLimits.StatorCurrentLimitEnable = true;
               config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
               config.Commutation.AdvancedHallSupport = AdvancedHallSupportValue.Enabled;
@@ -124,24 +138,24 @@ public class Elevator extends SubsystemBase {
     motorLeader.setPosition(0);
   }
 
-  public void setPosition(double value) {
-    setpoint = MathUtil.clamp(value, 0, maxTravel);
+  public void setPosition(double valueInches) {
+    setpoint = MathUtil.clamp(valueInches, 0, maxTravel);
   }
 
-  public boolean isAtPosition(double value) {
-    return isAtPosition(value, tolerance);
+  public boolean isAtPosition(double valueInches) {
+    return isAtPosition(valueInches, tolerance);
   }
 
-  public boolean isAtPosition(double value, double tolerance) {
-    return MathUtil.isNear(value, getPosition(), tolerance);
+  public boolean isAtPosition(double valueInches, double tolerance) {
+    return MathUtil.isNear(valueInches, getPosition(), tolerance);
   }
 
-  public boolean isAbovePosition(double value) {
-    return getPosition() >= value;
+  public boolean isAbovePosition(double valueInches) {
+    return getPosition() > valueInches;
   }
 
-  public boolean isBelowPosition(double value) {
-    return getPosition() <= value;
+  public boolean isBelowPosition(double valueInches) {
+    return getPosition() < valueInches;
   }
 
   @Logged(name = "Position", importance = Importance.INFO)

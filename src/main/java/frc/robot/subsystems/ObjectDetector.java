@@ -7,20 +7,18 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.RobotController;
 import frc.robot.Constants;
 import frc.robot.lib.ObjectDetectionPacket;
-import frc.robot.lib.TimestampedCircularBuffer;
+import frc.robot.lib.TimestampedTranslation2d;
 import frc.robot.lib.UdpListenerThread;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class ObjectDetector {
-  private final Lock lock = new ReentrantLock();
   private final UdpListenerThread<ObjectDetectionPacket> listener;
   private AtomicLong latency = new AtomicLong(0);
 
-  // timestamped log of recently detected objects
-  private final TimestampedCircularBuffer<Translation2d> detectedObjects =
-      new TimestampedCircularBuffer<>(50);
+  private static final TimestampedTranslation2d noObject =
+      new TimestampedTranslation2d(-1, Translation2d.kZero);
+
+  private TimestampedTranslation2d detectedObject = noObject;
 
   public ObjectDetector() {
     listener =
@@ -40,20 +38,25 @@ public class ObjectDetector {
 
       // TODO: decide on which object(s) to take when multiple are detected
       final var o = packet.objects[0];
-      lock.lock();
-      try {
-        detectedObjects.enqueue(
-            packet.timestamp,
-            new Translation2d(o.distance, 0).rotateBy(Rotation2d.fromRadians(o.angle)));
-      } finally {
-        lock.unlock();
+      final var translation =
+          new Translation2d(o.distance, 0).rotateBy(Rotation2d.fromRadians(o.angle));
+
+      synchronized (this) {
+        detectedObject = new TimestampedTranslation2d(packet.timestamp, translation);
       }
     }
   }
 
-  /** Returns recent latency in microseconds. */
-  @Logged(name = "Latency", importance = Importance.DEBUG)
-  public long getLatency() {
-    return latency.get();
+  /** Returns recent latency in milliseconds. */
+  @Logged(name = "LatencyMS", importance = Importance.DEBUG)
+  public double getLatency() {
+    return latency.get() / 1000.0;
+  }
+
+  /** Returns most recently detected object. */
+  public TimestampedTranslation2d getDetectedObject() {
+    synchronized (this) {
+      return detectedObject;
+    }
   }
 }

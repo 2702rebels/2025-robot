@@ -34,6 +34,7 @@ import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
 import frc.robot.lib.SysIdSwerveTranslationTorqueCurrent;
+import frc.robot.lib.Tunable;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -104,10 +105,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   private final SysIdRoutine sysIdRoutineTranslationVoltage =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              null, // Use default ramp rate (1V/s)
-              Volts.of(4), // Reduce dynamic step voltage to 4V to prevent brownout
-              null, // Use default timeout (10s)
-              // Log state with SignalLogger class
+              null, // default ramp rate (1V/s)
+              Volts.of(4), // reduce dynamic step voltage to 4V to prevent brownout
+              null, // default timeout (10s)
+              // log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdTranslationVoltage_State", state.toString())),
           new SysIdRoutine.Mechanism(
               output -> setControl(translationVoltageCharacterization.withVolts(output)),
@@ -119,10 +120,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   private final SysIdRoutine sysIdRoutineTranslationCurrent =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              Volts.of(10).per(Second), // ramp of 5A/s
+              Volts.of(10).per(Second), // ramp of 10A/s
               Volts.of(20), // dynamic step of 20A
-              Seconds.of(10), // timeout of 10s
-              // Log state with SignalLogger class
+              null, // default timeout (10s)
+              // log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdTranslationCurrent_State", state.toString())),
           new SysIdRoutine.Mechanism(
               output ->
@@ -135,10 +136,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   private final SysIdRoutine sysIdRoutineSteer =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              null, // Use default ramp rate (1V/s)
-              Volts.of(7), // Use dynamic voltage of 7V
-              null, // Use default timeout (10s)
-              // Log state with SignalLogger class
+              null, // default ramp rate (1V/s)
+              Volts.of(7), // dynamic voltage of 7V
+              null, // default timeout (10s)
+              // log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdSteer_State", state.toString())),
           new SysIdRoutine.Mechanism(
               volts -> setControl(steerCharacterization.withVolts(volts)), null, this));
@@ -150,18 +151,16 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   private final SysIdRoutine sysIdRoutineRotation =
       new SysIdRoutine(
           new SysIdRoutine.Config(
-              /* This is in radians per second², but SysId only supports "volts per second" */
-              Volts.of(Math.PI / 6).per(Second),
-              /* This is in radians per second, but SysId only supports "volts" */
-              Volts.of(Math.PI),
-              null, // Use default timeout (10 s)
-              // Log state with SignalLogger class
+              Volts.of(Math.PI / 6).per(Second), // in radians per second²
+              Volts.of(Math.PI), // in radians per second
+              null, // default timeout (10 s)
+              // log state with SignalLogger class
               state -> SignalLogger.writeString("SysIdRotation_State", state.toString())),
           new SysIdRoutine.Mechanism(
               output -> {
-                /* Output is actually radians per second, but SysId only supports "volts" */
+                // output is actually radians per second, but SysId only supports "volts"
                 setControl(rotationCharacterization.withRotationalRate(output.in(Volts)));
-                /* Also log the requested output for SysId */
+                // also log the requested output for SysId
                 SignalLogger.writeDouble("Rotational_Rate", output.in(Volts));
               },
               null,
@@ -176,6 +175,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     if (Utils.isSimulation()) {
       startSimThread();
     }
+
+    Tunable.bind("Drive/PathX", pathXController);
+    Tunable.bind("Drive/PathY", pathYController);
+    Tunable.bind("Drive/PathTheta", pathThetaController);
   }
 
   /**

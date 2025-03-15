@@ -6,7 +6,6 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
-import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.networktables.DoubleArrayPublisher;
 import edu.wpi.first.networktables.DoublePublisher;
@@ -32,20 +31,8 @@ public class Telemetry {
   private final StructArrayPublisher<SwerveModuleState> driveModuleTargets =
       driveStateTable.getStructArrayTopic("ModuleTargets", SwerveModuleState.struct).publish();
 
-  private final StructArrayPublisher<SwerveModulePosition> driveModulePositions =
-      driveStateTable.getStructArrayTopic("ModulePositions", SwerveModulePosition.struct).publish();
-
   private final DoubleArrayPublisher driveModuleSlipRatios =
       driveStateTable.getDoubleArrayTopic("ModuleSlipRatios").publish();
-
-  private final DoubleArrayPublisher driveModuleSlipAccums =
-      driveStateTable.getDoubleArrayTopic("ModuleSlipAccums").publish();
-
-  private final DoubleArrayPublisher driveModuleTranslationVelocities =
-      driveStateTable.getDoubleArrayTopic("ModuleTranslationVelocities").publish();
-
-  private final DoubleArrayPublisher driveModuleVelocityDiff =
-      driveStateTable.getDoubleArrayTopic("ModuleVelocityDiff").publish();
 
   private final DoublePublisher driveTimestamp =
       driveStateTable.getDoubleTopic("Timestamp").publish();
@@ -57,10 +44,8 @@ public class Telemetry {
   private final double[] moduleStatesArray = new double[8];
   private final double[] moduleTargetsArray = new double[8];
   private final double[] moduleSlipRatiosArray = new double[4];
-  private final double[] moduleSlipAccumsArray = new double[4];
-  private final double[] moduleVelocityDiffArray = new double[4];
 
-  private final double[] moduleTranslationVelocities = new double[10];
+  private static final double kStationaryTolerance = 0.3; // speed (m/s)
 
   public Telemetry(boolean loggingEnabled) {
     if (loggingEnabled) {
@@ -75,55 +60,11 @@ public class Telemetry {
     driveSpeeds.set(state.Speeds);
     driveModuleStates.set(state.ModuleStates);
     driveModuleTargets.set(state.ModuleTargets);
-    driveModulePositions.set(state.ModulePositions);
     driveTimestamp.set(state.Timestamp);
     driveOdometryFrequency.set(1.0 / state.OdometryPeriod);
 
-    // detect slippage by comparing translation velocities of the wheels with IMU velocity
-    final var robotVelocity =
-        new Translation2d(state.Speeds.vxMetersPerSecond, state.Speeds.vyMetersPerSecond);
-
-    final var robotVelocityNorm = robotVelocity.getNorm();
-    moduleTranslationVelocities[0] = robotVelocity.getX();
-    moduleTranslationVelocities[1] = robotVelocity.getY();
-
-    for (var i = 0; i < state.ModuleStates.length; ++i) {
-      final var moduleVelocity =
-          new Translation2d(
-              state.ModuleStates[i].speedMetersPerSecond, state.ModuleStates[i].angle);
-
-      final var moduleTranslationVelocity =
-          new Translation2d(
-              moduleVelocity.getX()
-                  + state.Speeds.omegaRadiansPerSecond * TunerConstants.modulePositions[i].getY(),
-              moduleVelocity.getY()
-                  - state.Speeds.omegaRadiansPerSecond * TunerConstants.modulePositions[i].getX());
-
-      moduleTranslationVelocities[i * 2 + 2] = moduleTranslationVelocity.getX();
-      moduleTranslationVelocities[i * 2 + 3] = moduleTranslationVelocity.getY();
-
-      // robot can be stationary, but the slippage can still occur if we are trying to push against
-      // an obstacle
-      if (MathUtil.isNear(0, robotVelocityNorm, 0.3)) {
-        moduleSlipRatiosArray[i] =
-            MathUtil.isNear(0, moduleTranslationVelocity.getNorm(), 0.3) ? 0 : 1;
-      } else {
-        // technically we should compute projections on the robot IMU velocity vector
-        // but all these vectors should be colinear unless the robot is falling apart
-        moduleSlipRatiosArray[i] =
-            (moduleTranslationVelocity.getNorm() - robotVelocityNorm) / robotVelocityNorm;
-      }
-
-      moduleSlipAccumsArray[i] += moduleSlipRatiosArray[i];
-
-      moduleVelocityDiffArray[i] =
-          state.ModuleTargets[i].speedMetersPerSecond - state.ModuleStates[i].speedMetersPerSecond;
-    }
-
+    computeSlipRatios(state, moduleSlipRatiosArray);
     driveModuleSlipRatios.set(moduleSlipRatiosArray);
-    driveModuleSlipAccums.set(moduleSlipAccumsArray);
-    driveModuleTranslationVelocities.set(moduleTranslationVelocities);
-    driveModuleVelocityDiff.set(moduleVelocityDiffArray);
 
     // signal logger
     poseArray[0] = state.Pose.getX();
@@ -142,5 +83,38 @@ public class Telemetry {
     SignalLogger.writeDoubleArray("DriveState/ModuleTargets", moduleTargetsArray);
     SignalLogger.writeDoubleArray("DriveState/ModuleSlipRatios", moduleSlipRatiosArray);
     SignalLogger.writeDouble("DriveState/OdometryPeriod", state.OdometryPeriod, "seconds");
+  }
+
+  /** Computes slip ratios for each module and populates the array. */
+  public static void computeSlipRatios(SwerveDriveState state, double[] slipRatios) {
+    // detect slippage by comparing translation velocities of the wheels with IMU velocity
+    final var robotVelocity =
+        new Translation2d(state.Speeds.vxMetersPerSecond, state.Speeds.vyMetersPerSecond);
+
+    final var robotVelocityNorm = robotVelocity.getNorm();
+
+    for (var i = 0; i < state.ModuleStates.length; ++i) {
+      final var moduleVelocity =
+          new Translation2d(
+              state.ModuleStates[i].speedMetersPerSecond, state.ModuleStates[i].angle);
+
+      final var moduleTranslationVelocity =
+          new Translation2d(
+              moduleVelocity.getX()
+                  + state.Speeds.omegaRadiansPerSecond * TunerConstants.modulePositions[i].getY(),
+              moduleVelocity.getY()
+                  - state.Speeds.omegaRadiansPerSecond * TunerConstants.modulePositions[i].getX());
+
+      // robot can be stationary, but can still slip if we are trying to push against an obstacle
+      if (MathUtil.isNear(0, robotVelocityNorm, kStationaryTolerance)) {
+        slipRatios[i] =
+            MathUtil.isNear(0, moduleTranslationVelocity.getNorm(), kStationaryTolerance) ? 0 : 1;
+      } else {
+        // technically we should compute projections on the robot IMU velocity vector
+        // but all these vectors should be colinear unless the robot is falling apart
+        slipRatios[i] =
+            (moduleTranslationVelocity.getNorm() - robotVelocityNorm) / robotVelocityNorm;
+      }
+    }
   }
 }

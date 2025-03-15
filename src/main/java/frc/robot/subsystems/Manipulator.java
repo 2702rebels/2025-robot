@@ -21,7 +21,7 @@ public final class Manipulator extends SubsystemBase {
 
   private static final double __kAlgaeIntakeVelocity = 0.5;
   private static final double __kAlgaeEjectVelocity = 0.5;
-  private static final double __kAlgaeHoldVelocity = 0.2;
+  private static final double __kAlgaeHoldVelocity = 0.1;
 
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;

@@ -1,10 +1,10 @@
 package frc.robot.subsystems;
 
 import com.revrobotics.AbsoluteEncoder;
+import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkClosedLoopController;
-import com.revrobotics.spark.SparkLimitSwitch;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SignalsConfig;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
@@ -28,11 +28,14 @@ public class Pivot extends SubsystemBase {
   private static final double __kD = 0.;
 
   private static final double __kS = 0;
-  private static final double __kG = 0.7;
+  private static final double __kG = 0.2;
   private static final double __kV = 0.012;
   private static final double __kA = 0;
   private static final double __kMaxVelocity = 480; // degrees/s
   private static final double __kMaxAcceleration = 1920; // degrees/s^2
+
+  // gear reduction 45:1 versa, 3:1 gear
+  private static final double gearRatio = 45 * 3;
 
   // maximum safe angle (degrees)
   private static final double maxAngle = 140;
@@ -50,6 +53,7 @@ public class Pivot extends SubsystemBase {
   private final LoggedSparkMax motorFollower;
 
   private final AbsoluteEncoder encoder;
+  private final RelativeEncoder encoderRelative;
   private final SparkClosedLoopController controller;
 
   private final ArmFeedforward ffController;
@@ -84,9 +88,16 @@ public class Pivot extends SubsystemBase {
                   .positionConversionFactor(360) // degrees
                   .velocityConversionFactor(360); // degrees/second
 
+              // relative encoder should not be inverted and uses correct velocity conversion factor
+              config
+                  .encoder
+                  .positionConversionFactor(360 / gearRatio)
+                  .velocityConversionFactor(60 / gearRatio);
+
               config
                   .closedLoop
-                  .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
+                  // .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
+                  .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                   .velocityFF(0)
                   .p(__kP)
                   .d(__kD);
@@ -105,7 +116,15 @@ public class Pivot extends SubsystemBase {
             });
 
     encoder = motorLeader.getAbsoluteEncoder();
+    encoderRelative = motorLeader.getEncoder();
     controller = motorLeader.getClosedLoopController();
+
+    // IMPORTANT: we use relative encoder on the motor for POSITIONAL CONTROL
+    // to reduce the impact of the backlash. at the same time we use absolute
+    // encoder for VELOCITY readings, since relative encoder reports bogus values
+
+    // initialize relative encoder based on the absolute encoder
+    encoderRelative.setPosition(encoder.getPosition());
 
     // make configuration tunable (must be done after configuration is bound to the motor)
     Tunable.bind("Pivot", motorLeader, ClosedLoopSlot.kSlot0);
@@ -146,15 +165,6 @@ public class Pivot extends SubsystemBase {
     controller.setReference(setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0, ff);
   }
 
-  /**
-   * Gets the algae presence sensor.
-   *
-   * <p>Limit switch is connected to the data port on the SparkMax controller.
-   */
-  public SparkLimitSwitch getAlgaePresenceSensor() {
-    return motorLeader.getForwardLimitSwitch();
-  }
-
   public void setAngle(double valueDegrees) {
     setpoint = Math.min(valueDegrees, maxAngle);
   }
@@ -167,24 +177,22 @@ public class Pivot extends SubsystemBase {
     return MathUtil.isNear(valueDegrees, getAngle(), toleranceDegrees);
   }
 
+  public boolean isAboveAngle(double valueDegrees) {
+    return getAngle() > valueDegrees;
+  }
+
+  public boolean isBelowAngle(double valueDegrees) {
+    return getAngle() < valueDegrees;
+  }
+
   @Logged(name = "Angle", importance = Importance.INFO)
   public double getAngle() {
-    return encoder.getPosition();
+    return encoderRelative.getPosition();
   }
 
   @Logged(name = "Velocity", importance = Importance.INFO)
   public double getVelocity() {
-    return encoder.getVelocity();
-  }
-
-  @Logged(name = "State/Angle", importance = Importance.DEBUG)
-  public double stateAngle() {
-    return state.position;
-  }
-
-  @Logged(name = "State/Velocity", importance = Importance.DEBUG)
-  public double stateVelocity() {
-    return state.velocity;
+    return encoder.getVelocity(); // SEE COMMENT ABOUT RELATIVE VS ABSOLUTE ENCODERS
   }
 
   // spotless:off

@@ -16,11 +16,8 @@ import frc.robot.lib.VisionPacket;
 import frc.robot.lib.VisionPose;
 import frc.robot.lib.VisionState;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class AprilTagDetector {
-  private final Lock lock = new ReentrantLock();
   private final UdpListenerThread<VisionPacket> listener;
   private AtomicLong latency = new AtomicLong(0);
 
@@ -51,8 +48,7 @@ public class AprilTagDetector {
     final var t = RobotController.getFPGATime();
     latency.set(t - packet.timestamp);
 
-    lock.lock();
-    try {
+    synchronized (this) {
       // bit 1 indicates that pose can be trusted
       if ((packet.flags & 0x1) != 0 && packet.timestamp > pose.timestamp) {
         pose.timestamp = packet.timestamp;
@@ -70,39 +66,32 @@ public class AprilTagDetector {
           tags[index].y = Units.inchesToMeters(packet.tags[i].y);
         }
       }
-    } finally {
-      lock.unlock();
     }
   }
 
-  /** Returns recent latency in microseconds. */
-  @Logged(name = "Latency", importance = Importance.DEBUG)
-  public long getLatency() {
-    return latency.get();
+  /** Returns recent latency in milliseconds. */
+  @Logged(name = "LatencyMS", importance = Importance.DEBUG)
+  public double getLatency() {
+    return latency.get() / 1000.0;
   }
 
   /** Returns snapshot of the vision state. */
-  public VisionState getState() {
-    lock.lock();
-    try {
-      final var estimatedPose =
-          pose.timestamp <= 0
-              ? noPose
-              : new TimestampedValue<>(
-                  pose.timestamp, new Pose2d(pose.x, pose.y, Rotation2d.fromRadians(pose.theta)));
+  public synchronized VisionState getState() {
+    final var estimatedPose =
+        pose.timestamp <= 0
+            ? noPose
+            : new TimestampedValue<>(
+                pose.timestamp, new Pose2d(pose.x, pose.y, Rotation2d.fromRadians(pose.theta)));
 
-      final var estimatedTags = new TimestampedTranslation2d[22];
-      for (var i = 0; i < estimatedTags.length; ++i) {
-        estimatedTags[i] =
-            tags[i].timestamp <= 0
-                ? noTag
-                : new TimestampedTranslation2d(
-                    tags[i].timestamp, new Translation2d(tags[i].x, tags[i].y));
-      }
-
-      return new VisionState(estimatedPose, estimatedTags);
-    } finally {
-      lock.unlock();
+    final var estimatedTags = new TimestampedTranslation2d[22];
+    for (var i = 0; i < estimatedTags.length; ++i) {
+      estimatedTags[i] =
+          tags[i].timestamp <= 0
+              ? noTag
+              : new TimestampedTranslation2d(
+                  tags[i].timestamp, new Translation2d(tags[i].x, tags[i].y));
     }
+
+    return new VisionState(estimatedPose, estimatedTags);
   }
 }

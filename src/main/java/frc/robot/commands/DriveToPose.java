@@ -35,8 +35,8 @@ public class DriveToPose extends Command {
           DriveConstants.PoseChasing.translationKi,
           DriveConstants.PoseChasing.translationKd,
           new TrapezoidProfile.Constraints(
-              DriveConstants.maxSpeed.in(MetersPerSecond) * 0.8,
-              DriveConstants.maxAcceleration.in(MetersPerSecondPerSecond) * 0.8),
+              DriveConstants.maxSpeed.in(MetersPerSecond) * 0.5,
+              DriveConstants.maxAcceleration.in(MetersPerSecondPerSecond) * 0.5),
           Constants.cyclePeriodSeconds);
 
   private final ProfiledPIDController rotationController =
