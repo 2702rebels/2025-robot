@@ -69,7 +69,7 @@ public class RobotContainer {
 
   private final CommandXboxController controllerDriver = new CommandXboxController(0);
 
-  public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+  private final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
   @Logged(name = "Elevator", importance = Importance.INFO)
   private final Elevator elevator =
@@ -101,8 +101,8 @@ public class RobotContainer {
   private final AprilTagDetector aprilTagDetector = new AprilTagDetector();
 
   private final LedResource led = new LedResource(Constants.LedConstants.PWM_PORT);
-  private final LedFeedback ledFeedback = new LedFeedback(led, () -> state.gameState);
-  private final LedVision ledVision = new LedVision(led, () -> state.localizationState);
+  private final LedFeedback ledFeedback = new LedFeedback(led, this::getDefaultLedFeedback);
+  private final LedVision ledVision = new LedVision(led, this::getDefaultVisionFeedback);
 
   // startup validation checklist
   @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
@@ -147,7 +147,7 @@ public class RobotContainer {
   private final Trigger shouldInitiateCoralSequence =
       state
           .isAuto
-          .and(state.scoringReady)
+          .and(state.atScoringPose)
           .debounce(0.25)
           .or(scoreButton.debounce(0.5, DebounceType.kFalling));
 
@@ -170,7 +170,9 @@ public class RobotContainer {
         "DriveForward",
         () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
 
-    autoChooser.addRoutine("Score L4 (HG)", autoRoutines::scoreL4_HG);
+    autoChooser.addRoutine("Score L2", autoRoutines::scoreL2);
+    autoChooser.addRoutine("Score L3", autoRoutines::scoreL3);
+    autoChooser.addRoutine("Score L4", autoRoutines::scoreL4);
     autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
@@ -235,28 +237,28 @@ public class RobotContainer {
 
     drivetrain.registerTelemetry(logger::update);
 
-    resetIntentButton.onTrue(state.setIntent(Intent.NONE));
+    resetIntentButton.onTrue(state.setIntent(Intent.kNone));
 
     // coral intake
-    floorIntakeButton.onTrue(state.setIntent(Intent.CORAL_FLOOR_INTAKE));
-    stationIntakeButton.onTrue(state.setIntent(Intent.CORAL_STATION_INTAKE));
+    floorIntakeButton.onTrue(state.setIntent(Intent.kCoralFloorIntake));
+    stationIntakeButton.onTrue(state.setIntent(Intent.kCoralStationIntake));
 
     // coral scoring
-    scoreButton.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.CORAL_SCORE_AUTO));
-    scoreManualButton.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.CORAL_SCORE_L1));
+    scoreButton.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.kCoralScoreAuto));
+    scoreManualButton.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.kCoralScoreL1));
 
     // algae scoring
-    scoreButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.ALGAE_SCORE_NET));
-    scoreManualButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.ALGAE_EJECT));
+    scoreButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeScoreNet));
+    scoreManualButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeEject));
 
-    algaeIntakeL2Button.onTrue(state.setIntent(Intent.ALGAE_INTAKE_L2));
-    algaeIntakeL3Button.onTrue(state.setIntent(Intent.ALGAE_INTAKE_L3));
+    algaeIntakeL2Button.onTrue(state.setIntent(Intent.kAlgaeIntakeL2));
+    algaeIntakeL3Button.onTrue(state.setIntent(Intent.kAlgaeIntakeL3));
 
-    coralEjectButton.onTrue(state.setIntent(Intent.CORAL_EJECT));
-    coralEjectButton.onFalse(state.setIntent(Intent.NONE));
+    coralEjectButton.onTrue(state.setIntent(Intent.kCoralEject));
+    coralEjectButton.onFalse(state.setIntent(Intent.kNone));
 
-    hoverButton.onTrue(state.setIntent(Intent.HOVER));
-    hoverButton.onFalse(state.setIntent(Intent.NONE));
+    hoverButton.onTrue(state.setIntent(Intent.kHover));
+    hoverButton.onFalse(state.setIntent(Intent.kNone));
 
     // manually toggle algae presence (until we have limit switch mechanism in place)
     toggleAlgaeButton.onTrue(
@@ -356,7 +358,7 @@ public class RobotContainer {
         .whileTrue(manipulator.intakeCoral());
 
     // reset intent once coral has been acquired
-    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.NONE));
+    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.kNone));
 
     // rumble once the coral has been acquired
     superstructure
@@ -379,8 +381,8 @@ public class RobotContainer {
 
     // score coral via auto target
     state
-        .hasScoringPose
-        .and(state.isAuto)
+        .isAuto
+        .and(state.hasScoringPose)
         .onTrue(new DriveToPose(drivetrain, () -> state.getScoringPose()).until(hasDriverInput));
 
     // reset auto mode once driver input is received
@@ -389,9 +391,8 @@ public class RobotContainer {
     // scoring L2, L3 (elevate to L2 and L3 as we are driving)
     state
         .shouldScoreCoralL2
-        .or(state.shouldScoreCoralL3)
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(this::getAutoScoringPosition));
+        .onTrue(superstructure.setPosition(Position.L2));
 
     state
         .shouldScoreCoralL2
@@ -399,6 +400,11 @@ public class RobotContainer {
         .and(superstructure.canScoreL2)
         .and(shouldInitiateCoralSequence)
         .whileTrue(manipulator.ejectCoral());
+
+    state
+        .shouldScoreCoralL3
+        .and(superstructure.hasCoral)
+        .onTrue(superstructure.setPosition(Position.L3));
 
     state
         .shouldScoreCoralL3
@@ -411,26 +417,14 @@ public class RobotContainer {
     state
         .shouldScoreCoralL4
         .and(superstructure.hasCoral)
-        .and(state.scoringReady)
-        .onTrue(superstructure.setPosition(this::getAutoScoringPosition));
+        .onTrue(superstructure.setPosition(Position.L4));
 
     state
         .shouldScoreCoralL4
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL4)
-        .onTrue(
-            state
-                .resetScoringPose()
-                .andThen(
-                    driveForward(Inches.of(13))
-                        .withTimeout(1.5)
-                        .andThen(state.setIntent(Intent.CORAL_SCORE_L4_FINAL))
-                        .andThen(
-                            superstructure
-                                .maintainPosition(Position.L4_SCORED)
-                                .until(superstructure::isDoneScoringL4))
-                        .andThen(driveForward(Inches.of(-10)).withTimeout(1))
-                        .andThen(state.setIntent(Intent.NONE))));
+        .and(shouldInitiateCoralSequence)
+        .onTrue(scoreL4Sequence());
 
     // reset intent once coral has been scored
     state
@@ -438,7 +432,7 @@ public class RobotContainer {
         .or(state.shouldScoreCoralL2)
         .or(state.shouldScoreCoralL3)
         .and(superstructure.hasCoral.negate())
-        .onTrue(state.setIntent(Intent.NONE));
+        .onTrue(state.setIntent(Intent.kNone));
 
     // hover
     state.shouldHover.onTrue(superstructure.setPosition(Position.HOVER));
@@ -459,7 +453,8 @@ public class RobotContainer {
             () -> elevator.isAbovePosition(52)));
 
     // LED
-    state.scoringReady.whileTrue(ledFeedback.signalReady());
+    state.atScoringPose.whileTrue(ledFeedback.signalReady());
+    state.isAuto.whileTrue(ledVision.signalAssist());
 
     // endgame alerts
     new Trigger(
@@ -483,19 +478,36 @@ public class RobotContainer {
                 rumble(Milliseconds.of(200))));
   }
 
-  private Position getAutoScoringPosition() {
-    switch (state.getScoreLevel()) {
-      case 1:
-        return Position.L1;
-      case 2:
-        return Position.L2;
-      case 3:
-        return Position.L3;
-      case 4:
-        return Position.L4;
+  /** Returns feedback for LED subsystem */
+  private LedFeedback.Type getDefaultLedFeedback() {
+    switch (state.intent) {
+      case kCoralScoreL1:
+      case kCoralScoreL2:
+      case kCoralScoreL3:
+      case kCoralScoreL4:
+        return LedFeedback.Type.kScoringCoral;
+      case kCoralFloorIntake:
+      case kCoralStationIntake:
+        return LedFeedback.Type.kIntakingCoral;
+      case kAlgaeScoreNet:
+      case kAlgaeEject:
+        return LedFeedback.Type.kScoringAlgae;
+      case kAlgaeIntakeL2:
+      case kAlgaeIntakeL3:
+        return LedFeedback.Type.kIntakingAlgae;
       default:
-        return Position.STOWED;
+        if (superstructure.hasCoral.getAsBoolean()) {
+          return LedFeedback.Type.kHoldingCoral;
+        }
+        if (superstructure.hasAlgae.getAsBoolean()) {
+          return LedFeedback.Type.kHoldingAlgae;
+        }
+        return LedFeedback.Type.kNone;
     }
+  }
+
+  private LedVision.Type getDefaultVisionFeedback() {
+    return LedVision.Type.kNone;
   }
 
   /** Commands drive forward fixed distance. */
@@ -521,8 +533,23 @@ public class RobotContainer {
         .ejectAlgae()
         .withTimeout(1)
         .andThen(manipulator.stop())
-        .andThen(state.setIntent(Intent.NONE))
+        .andThen(state.setIntent(Intent.kNone))
         .andThen(new InstantCommand(() -> superstructure.setAlgaePresence(false)));
+  }
+
+  /** Command sequence to score at L4 and reset. */
+  private Command scoreL4Sequence() {
+    return state
+        .resetScoringPose()
+        .andThen(
+            Commands.sequence(
+                driveForward(Inches.of(12)).withTimeout(1),
+                state.setIntent(Intent.kCoralScoreL4Final),
+                superstructure
+                    .maintainPosition(Position.L4_SCORED)
+                    .until(superstructure::isDoneScoringL4),
+                driveForward(Inches.of(-10)).withTimeout(1),
+                state.setIntent(Intent.kNone)));
   }
 
   public Command getAutonomousCommand() {
@@ -557,8 +584,4 @@ public class RobotContainer {
   private static final Tunable.DoubleValue endgameAlert2 = Tunable.value("Endgame/Alert2", 10.0);
   private static final Tunable.DoubleValue preciseRotation = Tunable.value("Control/PreciseRotation", 0.2);
   // spotless:on
-
-  private static final Tunable.DoubleValue climbArm = Tunable.value("Climb/Arm/Position", 45);
-  private static final Tunable.DoubleValue climbWinch =
-      Tunable.value("Climb/Winch/Position", -13.5);
 }

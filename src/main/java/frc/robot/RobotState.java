@@ -47,7 +47,17 @@ public class RobotState {
 
   private static final int kCoralsPerLevelForRP = 5;
   private static final int kCoralsPerLevel = 12;
+
   private static final long kVisionCutoff = 60 * 1000; // microseconds
+
+  private static final double kStationarySpeedTolerance = 0.05; // 5 cm/sec
+  private static final double kStationaryOmegaTolerance = Units.degreesToRadians(5); // 5 deg/sec
+  private static final double kSlowSpeedTolerance = 1; // 1.0 m/sec
+  private static final double kSlowOmegaTolerance = Units.degreesToRadians(60); // 60 deg/sec
+  private static final double kRobotSlipThreshold = 0.3;
+  private static final double kOdometryTrustThreshold = 0.5;
+  private static final double kScoringPositionRotationTolerance = 5; // degrees
+  private static final double kScoringPositionTranslationTolerance = Units.inchesToMeters(2);
 
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
 
@@ -58,17 +68,30 @@ public class RobotState {
   // external supplier of observed historical robot poses
   private Function<Long, Optional<Pose2d>> historicalPoseSupplier;
 
+  // external drive state supplier
+  private Supplier<SwerveDriveState> driveStateSupplier;
+
+  // external odometry pose reset
+  private Consumer<Pose2d> odometryPoseReset;
+
   // external vision state supplier
   private Supplier<VisionState> visionStateSupplier;
 
   // external object detection supplier
   private Supplier<TimestampedTranslation2d> detectedObjectSupplier;
 
-  // external drive state supplier
-  private Supplier<SwerveDriveState> driveStateSupplier;
+  private long visionPoseTimestamp = -1;
+  private long coralPoseTimestamp = -1;
 
-  // external odometry pose reset
-  private Consumer<Pose2d> odometryPoseReset;
+  private Pose2d robotPose = Pose2d.kZero;
+  private Pose2d odometryPose = Pose2d.kZero;
+  private Pose2d visionPose = Pose2d.kZero;
+  private Pose2d coralPose = Pose2d.kZero;
+
+  private Optional<Pose2d> targetPose = Optional.empty();
+  private Optional<Pose2d> scoringPose = Optional.empty();
+
+  private boolean auto; // indicator of automatic scoring mode
 
   /*
    * ReefState to use with Reef widgets
@@ -89,21 +112,12 @@ public class RobotState {
 
   private final SendableChooser<ScoringStrategy> scoringStrategyChooser = new SendableChooser<>();
 
-  private static final double kStationarySpeedTolerance = 0.05; // 5 cm/sec
-  private static final double kStationaryOmegaTolerance = Units.degreesToRadians(5); // 5 deg/sec
-  private static final double kSlowSpeedTolerance = 1; // 1.0 m/sec
-  private static final double kSlowOmegaTolerance = Units.degreesToRadians(60); // 60 deg/sec
-  private static final double kRobotSlipThreshold = 0.3;
-  private static final double kOdometryTrustThreshold = 0.5;
-  private static final double kScoringPositionRotationTolerance = 5; // degrees
-  private static final double kScoringPositionTranslationTolerance = Units.inchesToMeters(2);
-
   private RobotState() {
     reefState = new ReefState();
 
-    scoringStrategyChooser.setDefaultOption("Auto", ScoringStrategy.AUTO);
-    scoringStrategyChooser.addOption("Ranking Point", ScoringStrategy.RP);
-    scoringStrategyChooser.addOption("Score", ScoringStrategy.SCORE);
+    scoringStrategyChooser.setDefaultOption("Auto", ScoringStrategy.kAuto);
+    scoringStrategyChooser.addOption("Ranking Point", ScoringStrategy.kRankingPoint);
+    scoringStrategyChooser.addOption("Score", ScoringStrategy.kScore);
 
     reefStateRobotPublisher = reefStateTable.getStructTopic("robot", ReefState.struct).publish();
     reefStateOperatorSubscriber =
@@ -117,190 +131,97 @@ public class RobotState {
     reefStateRobotPublisher.setDefault(new ReefState());
   }
 
+  /** Reef state (robot side) */
+  public final ReefState reefState;
+
   public static enum Intent {
-    NONE,
+    kNone,
 
     /** Hover intake to allow trapped game pieces to escape */
-    HOVER,
+    kHover,
 
     /** Intake coral form the floor */
-    CORAL_FLOOR_INTAKE,
+    kCoralFloorIntake,
 
     /** Intake coral from the loading station */
-    CORAL_STATION_INTAKE,
+    kCoralStationIntake,
 
     /** Eject coral */
-    CORAL_EJECT,
+    kCoralEject,
 
     /** Score coral at L1 */
-    CORAL_SCORE_L1,
+    kCoralScoreL1,
 
     /** Score coral at L2 */
-    CORAL_SCORE_L2,
+    kCoralScoreL2,
 
     /** Score coral at L3 */
-    CORAL_SCORE_L3,
+    kCoralScoreL3,
 
     /** Score coral at L4 */
-    CORAL_SCORE_L4,
+    kCoralScoreL4,
 
     /** Score coral at L2, L3, L4 per reef scoring strategy */
-    CORAL_SCORE_AUTO,
+    kCoralScoreAuto,
 
     /** Score coral at L4 (final motion) */
-    CORAL_SCORE_L4_FINAL,
+    kCoralScoreL4Final,
 
     /** Intake algae (L2 low) */
-    ALGAE_INTAKE_L2,
+    kAlgaeIntakeL2,
 
     /** Intake algae (L3 high) */
-    ALGAE_INTAKE_L3,
+    kAlgaeIntakeL3,
 
     /** Score algae into the net */
-    ALGAE_SCORE_NET,
+    kAlgaeScoreNet,
 
     /** Eject algae into the processor */
-    ALGAE_EJECT,
-  }
-
-  public static enum GameState {
-    IDLE,
-
-    /** Scoring coral sequence active */
-    SCORING_CORAL,
-
-    /** Scoring algae sequence active */
-    SCORING_ALGAE,
-
-    /** Intaking coral sequence active */
-    INTAKING_CORAL,
-
-    /** Intaking algae sequence active */
-    INTAKING_ALGAE,
-
-    /** Holding coral and taxing */
-    HOLDING_CORAL,
-
-    /** Holding algae and taxing */
-    HOLDING_ALGAE,
-
-    /** Climbing sequence active */
-    CLIMBING
-  }
-
-  public static enum LocalizationState {
-    NONE,
-
-    /** Vision targets recently acquired, pose can be trusted */
-    TRUSTED,
-
-    /** No recent vision updates, pose cannot be trusted */
-    UNTRUSTED,
+    kAlgaeEject,
   }
 
   public static enum ScoringStrategy {
     /** Automatic based on the match type (qualification / playoff) */
-    AUTO,
+    kAuto,
 
     /** Meet RP requirement */
-    RP,
+    kRankingPoint,
 
     /** Maximize total score */
-    SCORE,
+    kScore,
   }
 
   /** Scoring strategy for the reef */
   @Logged(name = "ScoringStrategy", importance = Importance.INFO)
-  public ScoringStrategy scoringStrategy = ScoringStrategy.AUTO;
+  public ScoringStrategy scoringStrategy = ScoringStrategy.kAuto;
 
   /** Robot intent */
   @Logged(name = "Intent", importance = Importance.INFO)
-  public Intent intent = Intent.NONE;
+  public Intent intent = Intent.kNone;
 
-  /** Robot game state */
-  @Logged(name = "GameState", importance = Importance.INFO)
-  public GameState gameState = GameState.IDLE;
-
-  /** Robot localization state */
-  @Logged(name = "LocalizationState", importance = Importance.INFO)
-  public LocalizationState localizationState = LocalizationState.NONE;
-
-  /** Reef state (robot side) */
-  public final ReefState reefState;
-
-  // spotless:off
-  @Logged(name = "Idle", importance = Importance.INFO)
-  public final Trigger idle = new Trigger(() -> intent == Intent.NONE);
-
-  @Logged(name = "ShouldHover", importance = Importance.INFO)
-  public final Trigger shouldHover = new Trigger(() -> intent == Intent.HOVER);
-
-  @Logged(name = "ShouldIntakeCoralFloor", importance = Importance.INFO)
-  public final Trigger shouldIntakeCoralFloor = new Trigger(() -> intent == Intent.CORAL_FLOOR_INTAKE);
-
-  @Logged(name = "ShouldIntakeCoralStation", importance = Importance.INFO)
-  public final Trigger shouldIntakeCoralStation = new Trigger(() -> intent == Intent.CORAL_STATION_INTAKE);
-
-  @Logged(name = "ShouldIntakeCoral", importance = Importance.INFO)
-  public final Trigger shouldIntakeCoral = shouldIntakeCoralFloor.or(shouldIntakeCoralStation);
-
-  @Logged(name = "ShouldEjectCoral", importance = Importance.INFO)
-  public final Trigger shouldEjectCoral = new Trigger(() -> intent == Intent.CORAL_EJECT);
-
-  @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.CORAL_SCORE_L1);
-
-  @Logged(name = "ShouldScoreCoralL2", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL2 = new Trigger(() -> intent == Intent.CORAL_SCORE_L2);
-
-  @Logged(name = "ShouldScoreCoralL3", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL3 = new Trigger(() -> intent == Intent.CORAL_SCORE_L3);
-
-  @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
-  public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.CORAL_SCORE_L4);
-
-  @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
-  public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L2);
-
-  @Logged(name = "ShouldIntakeAlgaeL3", importance = Importance.INFO)
-  public final Trigger shouldIntakeAlgaeL3 = new Trigger(() -> intent == Intent.ALGAE_INTAKE_L3);
-
-  @Logged(name = "ShouldIntakeAlgae", importance = Importance.INFO)
-  public final Trigger shouldIntakeAlgae = shouldIntakeAlgaeL2.or(shouldIntakeAlgaeL3);
-
-  @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
-  public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.ALGAE_EJECT);
-
-  @Logged(name = "ShouldScoreAlgaeNet", importance = Importance.INFO)
-  public final Trigger shouldScoreAlgaeNet = new Trigger(() -> intent == Intent.ALGAE_SCORE_NET);
-  // spotless:on
-
-  private Pose2d robotPose = Pose2d.kZero;
-  private Pose2d odometryPose = Pose2d.kZero;
-  private Pose2d visionPose = Pose2d.kZero;
-  private Pose2d coralPose = Pose2d.kZero;
-
-  private long visionPoseTimestamp = -1;
-  private long coralPoseTimestamp = -1;
-
+  /** Odometry trust (0 - no trust, 1 - full trust) */
   @Logged(name = "OdometryTrust", importance = Importance.INFO)
   private double odometryTrust = 0; // no trust initially
 
+  /** Fused robot pose */
   @Logged(name = "RobotPose", importance = Importance.INFO)
   public Pose2d getRobotPose() {
     return robotPose;
   }
 
+  /** Odometry robot pose */
   @Logged(name = "OdometryPose", importance = Importance.INFO)
   public Pose2d getOdometryPose() {
     return odometryPose;
   }
 
+  /** Vision robot pose */
   @Logged(name = "VisionPose", importance = Importance.INFO)
   public Pose2d getVisionPose() {
     return visionPose;
   }
 
+  /** Age (milliseconds) of the most recent vision pose */
   @Logged(name = "VisionPoseAgeMS", importance = Importance.DEBUG)
   public double getVisionPoseAge() {
     return visionPoseTimestamp > 0
@@ -308,11 +229,13 @@ public class RobotState {
         : -1;
   }
 
+  /** Detected coral pose */
   @Logged(name = "CoralPose", importance = Importance.INFO)
   public Pose2d getCoralPose() {
     return coralPose;
   }
 
+  /** Age (milliseconds) of the most recent coral pose */
   @Logged(name = "CoralPoseAgeMS", importance = Importance.DEBUG)
   public double getCoralPoseAge() {
     return coralPoseTimestamp > 0
@@ -320,45 +243,74 @@ public class RobotState {
         : -1;
   }
 
+  /** Scoring pose (debugging only) */
   @Logged(name = "ScoringPose", importance = Importance.DEBUG)
   public Pose2d getScoringPoseDebug() {
-    return scoringPose.isPresent() ? scoringPose.get() : null;
+    return scoringPose.isPresent() ? scoringPose.get() : Pose2d.kZero;
   }
 
-  // indicator of automatic scoring mode
-  private boolean auto;
+  // spotless:off
+  @Logged(name = "Idle", importance = Importance.INFO)
+  public final Trigger idle = new Trigger(() -> intent == Intent.kNone);
 
-  /** Target pose to supply to driveToPose command */
-  private Optional<Pose2d> targetPose = Optional.empty();
+  @Logged(name = "ShouldHover", importance = Importance.INFO)
+  public final Trigger shouldHover = new Trigger(() -> intent == Intent.kHover);
 
-  /** Target pose for auto scoring */
-  private Optional<Pose2d> scoringPose = Optional.empty();
+  @Logged(name = "ShouldIntakeCoralFloor", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoralFloor = new Trigger(() -> intent == Intent.kCoralFloorIntake);
 
-  /** Trigger for scoring pose presence. */
+  @Logged(name = "ShouldIntakeCoralStation", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoralStation = new Trigger(() -> intent == Intent.kCoralStationIntake);
+
+  @Logged(name = "ShouldIntakeCoral", importance = Importance.INFO)
+  public final Trigger shouldIntakeCoral = shouldIntakeCoralFloor.or(shouldIntakeCoralStation);
+
+  @Logged(name = "ShouldEjectCoral", importance = Importance.INFO)
+  public final Trigger shouldEjectCoral = new Trigger(() -> intent == Intent.kCoralEject);
+
+  @Logged(name = "ShouldScoreCoralL1", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL1 = new Trigger(() -> intent == Intent.kCoralScoreL1);
+
+  @Logged(name = "ShouldScoreCoralL2", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL2 = new Trigger(() -> intent == Intent.kCoralScoreL2);
+
+  @Logged(name = "ShouldScoreCoralL3", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL3 = new Trigger(() -> intent == Intent.kCoralScoreL3);
+
+  @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.kCoralScoreL4);
+
+  @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.kAlgaeIntakeL2);
+
+  @Logged(name = "ShouldIntakeAlgaeL3", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgaeL3 = new Trigger(() -> intent == Intent.kAlgaeIntakeL3);
+
+  @Logged(name = "ShouldIntakeAlgae", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgae = shouldIntakeAlgaeL2.or(shouldIntakeAlgaeL3);
+
+  @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
+  public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.kAlgaeEject);
+
+  @Logged(name = "ShouldScoreAlgaeNet", importance = Importance.INFO)
+  public final Trigger shouldScoreAlgaeNet = new Trigger(() -> intent == Intent.kAlgaeScoreNet);
+
+  @Logged(name = "Auto", importance = Importance.INFO)
+  public final Trigger isAuto = new Trigger(() -> auto);
+
+  @Logged(name = "IsPoseTrusted", importance = Importance.INFO)
+  public final Trigger isPoseTrusted = new Trigger(() -> odometryTrust >= kOdometryTrustThreshold);
+
   @Logged(name = "HasScoringPose", importance = Importance.INFO)
   public final Trigger hasScoringPose = new Trigger(() -> scoringPose.isPresent());
 
-  /** Trigger for scoring readiness */
-  @Logged(name = "ScoringReady", importance = Importance.INFO)
-  public final Trigger scoringReady = new Trigger(() -> !visionAssist.get() || isAtScoringPose());
-
-  /** Trigger for auto scoring mode */
-  @Logged(name = "Auto", importance = Importance.INFO)
-  public final Trigger isAuto = new Trigger(() -> auto);
+  @Logged(name = "AtScoringPose", importance = Importance.INFO)
+  public final Trigger atScoringPose = new Trigger(this::isAtScoringPose);
+  // spotless:on
 
   /** Binds external historical pose supplier. */
   public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
     historicalPoseSupplier = value;
-  }
-
-  /** Binds external vision state supplier. */
-  public void setVisionStateSupplier(Supplier<VisionState> value) {
-    visionStateSupplier = value;
-  }
-
-  /** Binds external object detection supplier. */
-  public void setDetectedObjectSupplier(Supplier<TimestampedTranslation2d> value) {
-    detectedObjectSupplier = value;
   }
 
   /** Binds external drive state supplier. */
@@ -371,91 +323,112 @@ public class RobotState {
     odometryPoseReset = value;
   }
 
+  /** Binds external vision state supplier. */
+  public void setVisionStateSupplier(Supplier<VisionState> value) {
+    visionStateSupplier = value;
+  }
+
+  /** Binds external object detection supplier. */
+  public void setDetectedObjectSupplier(Supplier<TimestampedTranslation2d> value) {
+    detectedObjectSupplier = value;
+  }
+
   /** Gets the score level for automatic scoring (1..4) */
   public int getScoreLevel() {
     return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
   }
 
+  /** Commands intent of the robot. */
   public Command setIntent(Intent intent) {
     return Commands.runOnce(
             () -> {
-              if (intent == Intent.CORAL_SCORE_AUTO
-                  && visionAssist.get()
-                  && localizationState == LocalizationState.TRUSTED) {
-                scoringPose = getClosestScoringPose(robotPose);
-                auto = true;
+              final var scoringLevel = getScoreLevel();
 
-                // do not set intent since we are trying to score via vision
-                // and no target is available
-                if (scoringPose.isEmpty()) {
-                  return;
-                }
+              // if vision assist is enabled and we trust current pose
+              // then try to acquire scoring pose based on the closest
+              // un-scored position, switch to auto mode if successful
+              if (intent == Intent.kCoralScoreAuto
+                  && visionAssist.get()
+                  && isPoseTrusted.getAsBoolean()) {
+                scoringPose = getClosestScoringPose(robotPose, scoringLevel);
+                auto = scoringPose.isPresent();
               }
 
-              var actualIntent = intent;
-              if (intent == Intent.CORAL_SCORE_AUTO) {
-                switch (getScoreLevel()) {
+              if (intent == Intent.kCoralScoreAuto) {
+                switch (scoringLevel) {
                   case 1:
-                    actualIntent = Intent.CORAL_SCORE_L1;
+                    this.intent = Intent.kCoralScoreL1;
                     break;
                   case 2:
-                    actualIntent = Intent.CORAL_SCORE_L2;
+                    this.intent = Intent.kCoralScoreL2;
                     break;
                   case 3:
-                    actualIntent = Intent.CORAL_SCORE_L3;
+                    this.intent = Intent.kCoralScoreL3;
                     break;
                   case 4:
-                    actualIntent = Intent.CORAL_SCORE_L4;
+                    this.intent = Intent.kCoralScoreL4;
                     break;
                 }
-              } else
-              // reset scoring pose when intent is removed
-              if (intent != Intent.CORAL_SCORE_AUTO) {
+              } else {
+                // reset scoring pose when intent is removed
                 scoringPose = Optional.empty();
                 auto = false;
-              }
 
-              switch (actualIntent) {
-                case CORAL_SCORE_L1:
-                case CORAL_SCORE_L2:
-                case CORAL_SCORE_L3:
-                case CORAL_SCORE_L4:
-                  gameState = GameState.SCORING_CORAL;
-                  break;
-                case CORAL_FLOOR_INTAKE:
-                case CORAL_STATION_INTAKE:
-                  gameState = GameState.INTAKING_CORAL;
-                  break;
-                case ALGAE_SCORE_NET:
-                case ALGAE_EJECT:
-                  gameState = GameState.SCORING_ALGAE;
-                  break;
-                case ALGAE_INTAKE_L2:
-                case ALGAE_INTAKE_L3:
-                  gameState = GameState.INTAKING_ALGAE;
-                  break;
-                default:
-                  gameState = GameState.IDLE;
-                  break;
+                this.intent = intent;
               }
-
-              this.intent = actualIntent;
             })
         .withName("SetIntent");
   }
 
+  /**
+   * Commands scoring at the specified level (2, 3, or 4) in auto mode, aborts if pose is not
+   * trusted
+   */
+  public Command scoreAuto(int level) {
+    return Commands.runOnce(
+        () -> {
+          if (!isPoseTrusted.getAsBoolean()) {
+            return;
+          }
+
+          scoringPose = getClosestScoringPose(robotPose, level);
+          if (scoringPose.isEmpty()) {
+            return;
+          }
+
+          switch (level) {
+            case 2:
+              intent = Intent.kCoralScoreL2;
+              break;
+            case 3:
+              intent = Intent.kCoralScoreL3;
+              break;
+            case 4:
+              intent = Intent.kCoralScoreL4;
+              break;
+            default:
+              return; // abort
+          }
+          auto = true;
+        });
+  }
+
+  /** Sets target pose to drive to. */
   public void setTargetPose(Pose2d pose) {
     targetPose = Optional.of(pose);
   }
 
+  /** Gets target pose to drive to. */
   public Optional<Pose2d> getTargetPose() {
     return targetPose;
   }
 
+  /** Gets scoring pose to drive to. */
   public Optional<Pose2d> getScoringPose() {
     return scoringPose;
   }
 
+  /** Determines whether robot is at the scoring pose. */
   public boolean isAtScoringPose() {
     if (scoringPose.isPresent()) {
       final var _scoringPose = scoringPose.get();
@@ -470,10 +443,12 @@ public class RobotState {
     return false;
   }
 
+  /** Command to reset scoring pose. */
   public Command resetScoringPose() {
     return new InstantCommand(() -> scoringPose = Optional.empty());
   }
 
+  /** Command to reset auto mode back to manual. */
   public Command resetAuto() {
     return new InstantCommand(() -> auto = false);
   }
@@ -585,14 +560,8 @@ public class RobotState {
       } else {
         robotPose = visionPose.interpolate(odometryPose, odometryTrust);
       }
-
-      localizationState = LocalizationState.TRUSTED;
     } else {
       robotPose = odometryPose;
-      localizationState =
-          odometryTrust < kOdometryTrustThreshold
-              ? LocalizationState.UNTRUSTED
-              : LocalizationState.TRUSTED;
     }
 
     // poll detected objects
@@ -617,16 +586,16 @@ public class RobotState {
     // to automatically pick the most appropriate target based on the current state
     if (!reefState.locked && DriverStation.isTeleopEnabled()) {
       final var effectiveScoringStrategy =
-          scoringStrategy == ScoringStrategy.AUTO
+          scoringStrategy == ScoringStrategy.kAuto
               ? DriverStation.getMatchType() == MatchType.Elimination
-                  ? ScoringStrategy.SCORE
-                  : ScoringStrategy.RP
+                  ? ScoringStrategy.kScore
+                  : ScoringStrategy.kRankingPoint
               : scoringStrategy;
 
       // fill levels starting from the top (zero-based indexing here, i.e. L1 = 0, L2 = 1, etc.)
       var targetLevel = -1;
 
-      if (effectiveScoringStrategy == ScoringStrategy.RP) {
+      if (effectiveScoringStrategy == ScoringStrategy.kRankingPoint) {
         if (reefState.coralsL4.cardinality() < kCoralsPerLevelForRP) {
           targetLevel = 3;
         } else if (reefState.coralsL3.cardinality() < kCoralsPerLevelForRP) {
@@ -638,7 +607,7 @@ public class RobotState {
 
       // if target level is not set with RP strategy above, it means that we think
       // RP has been achieved, so we should focus on scoring
-      if (effectiveScoringStrategy == ScoringStrategy.SCORE || targetLevel < 0) {
+      if (effectiveScoringStrategy == ScoringStrategy.kScore || targetLevel < 0) {
         if (reefState.coralsL4.cardinality() < kCoralsPerLevel) {
           targetLevel = 3;
         } else if (reefState.coralsL3.cardinality() < kCoralsPerLevel) {
@@ -662,8 +631,7 @@ public class RobotState {
   }
 
   /** Gets the closest scoring pose based on the closest reef faces. */
-  public Optional<Pose2d> getClosestScoringPose(Pose2d robotPose) {
-    final var scoringLevel = getScoreLevel();
+  private Optional<Pose2d> getClosestScoringPose(Pose2d robotPose, int scoringLevel) {
     final var scoringPoses =
         scoringLevel == 4 ? GameConstants.reefScoringPosesL4 : GameConstants.reefScoringPoses;
 
