@@ -56,8 +56,6 @@ public class RobotState {
   private static final double kSlowOmegaTolerance = Units.degreesToRadians(60); // 60 deg/sec
   private static final double kRobotSlipThreshold = 0.3;
   private static final double kOdometryTrustThreshold = 0.5;
-  private static final double kScoringPositionRotationTolerance = 5; // degrees
-  private static final double kScoringPositionTranslationTolerance = Units.inchesToMeters(2);
 
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
 
@@ -435,9 +433,10 @@ public class RobotState {
 
       final var d = _scoringPose.getTranslation().getDistance(robotPose.getTranslation());
       final var r =
-          Math.abs(_scoringPose.getRotation().getDegrees() - robotPose.getRotation().getDegrees());
+          Math.abs(_scoringPose.getRotation().getRadians() - robotPose.getRotation().getRadians());
 
-      return d < kScoringPositionRotationTolerance && r < kScoringPositionRotationTolerance;
+      return d < Constants.DriveConstants.PoseChasing.translationTolerance
+          && r < Constants.DriveConstants.PoseChasing.rotationTolerance;
     }
 
     return false;

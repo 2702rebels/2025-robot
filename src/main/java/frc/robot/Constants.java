@@ -4,6 +4,7 @@ import static edu.wpi.first.units.Units.*;
 
 import com.pathplanner.lib.config.PIDConstants;
 import com.pathplanner.lib.config.RobotConfig;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearAcceleration;
@@ -108,6 +109,12 @@ public final class Constants {
 
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;
+
+      /** Translation tolerance */
+      public static final double translationTolerance = Units.inchesToMeters(1.5);
+
+      /** Rotation tolerance */
+      public static final double rotationTolerance = Units.degreesToRadians(5);
     }
 
     /** PID configuration for path following controllers */
