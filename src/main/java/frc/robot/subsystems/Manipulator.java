@@ -38,7 +38,7 @@ public final class Manipulator extends SubsystemBase {
             guideCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(40)
+                  .smartCurrentLimit(30)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals
