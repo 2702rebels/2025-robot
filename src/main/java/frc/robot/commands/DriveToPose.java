@@ -10,6 +10,7 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
@@ -44,8 +45,8 @@ public class DriveToPose extends Command {
           DriveConstants.PoseChasing.rotationKi,
           DriveConstants.PoseChasing.rotationKd,
           new TrapezoidProfile.Constraints(
-              DriveConstants.maxAngularRate.in(RadiansPerSecond),
-              DriveConstants.maxAngularAcceleration.in(RadiansPerSecondPerSecond)),
+              DriveConstants.maxAngularRate.in(RadiansPerSecond) * 0.5,
+              DriveConstants.maxAngularAcceleration.in(RadiansPerSecondPerSecond) * 0.5),
           Constants.cyclePeriodSeconds);
 
   private double distanceErrorAbs;
@@ -175,10 +176,10 @@ public class DriveToPose extends Command {
     DogLog.log("DriveToPose/DistanceMeasured", distance);
     DogLog.log("DriveToPose/DistanceSetpoint", distanceController.getSetpoint().position);
     DogLog.log("DriveToPose/DistanceVelocity", distanceController.getSetpoint().velocity);
-    DogLog.log("DriveToPose/RotationMeasured", currentRotation);
+    DogLog.log("DriveToPose/RotationMeasured", Units.radiansToDegrees(currentRotation));
     DogLog.log("DriveToPose/RotationSetpoint", rotationController.getSetpoint().position);
     DogLog.log("DriveToPose/RotationVelocity", rotationController.getSetpoint().velocity);
-    DogLog.log("DriveToPose/RotationError", rotationErrorAbs);
+    DogLog.log("DriveToPose/RotationError", Units.radiansToDegrees(rotationErrorAbs));
     DogLog.log("DriveToPose/DistanceAtGoal", distanceController.atGoal());
     DogLog.log("DriveToPose/RotationAtGoal", rotationController.atGoal());
   }

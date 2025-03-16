@@ -89,7 +89,8 @@ public class RobotContainer {
   @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
   private boolean pivotEncoderValid = false;
 
-  // path follower
+  private static final Trigger disabled = new Trigger(() -> false);
+
   private final AutoFactory autoFactory;
   private final AutoRoutines autoRoutines;
   private final AutoChooser autoChooser = new AutoChooser();
@@ -104,14 +105,20 @@ public class RobotContainer {
   private final Trigger floorIntakeButton = controllerDriver.leftTrigger();
   private final Trigger stationIntakeButton = controllerDriver.leftBumper();
 
-  private final Trigger hoverButton = controllerDriver.povUp();
-  private final Trigger coralEjectButton = controllerDriver.povDown();
+  private final Trigger hoverButton =
+      Constants.Settings.sysIdBindings ? disabled : controllerDriver.povUp();
+  private final Trigger coralEjectButton =
+      Constants.Settings.sysIdBindings ? disabled : controllerDriver.povDown();
+
   private final Trigger scoreButton = controllerDriver.rightTrigger();
   private final Trigger scoreManualButton = controllerDriver.rightBumper();
 
   // algae manipulation
-  private final Trigger algaeIntakeL2Button = controllerDriver.povLeft();
-  private final Trigger algaeIntakeL3Button = controllerDriver.povRight();
+  private final Trigger algaeIntakeL2Button =
+      Constants.Settings.sysIdBindings ? disabled : controllerDriver.povLeft();
+  private final Trigger algaeIntakeL3Button =
+      Constants.Settings.sysIdBindings ? disabled : controllerDriver.povRight();
+
   private final Trigger toggleAlgaeButton = controllerDriver.y();
 
   private static final double kDriverTolerance = 0.05;
@@ -353,7 +360,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL2)
         .and(shouldInitiateCoralSequence)
-        .whileTrue(manipulator.ejectCoral().andThen(state.markScoringTarget()));
+        .whileTrue(state.markScoringTarget().andThen(manipulator.ejectCoral()));
 
     state
         .shouldScoreCoralL3
@@ -365,7 +372,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL3)
         .and(shouldInitiateCoralSequence)
-        .whileTrue(manipulator.ejectCoral().andThen(state.markScoringTarget()));
+        .whileTrue(state.markScoringTarget().andThen(manipulator.ejectCoral()));
 
     // scoring L4
     state
@@ -461,7 +468,7 @@ public class RobotContainer {
   }
 
   private LedVision.Type getDefaultVisionFeedback() {
-    return LedVision.Type.kNone;
+    return state.isPoseTrusted.getAsBoolean() ? LedVision.Type.kTrusted : LedVision.Type.kUnknown;
   }
 
   /** Commands drive forward fixed distance. */

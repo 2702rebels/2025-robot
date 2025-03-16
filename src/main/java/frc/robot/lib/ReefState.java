@@ -152,6 +152,7 @@ public class ReefState implements StructSerializable {
     coralsL4.clear();
     target = -1;
     locked = false;
+    level = 0;
   }
 
   /** ReefState struct for serialization. */
@@ -175,7 +176,7 @@ public class ReefState implements StructSerializable {
 
     @Override
     public String getSchema() {
-      return "uint8 algae;uint8 coralsL1;uint16 coralsL2;uint16 coralsL3;uint16 coralsL4;int8 target;bool locked;byte level;";
+      return "uint8 algae;uint8 coralsL1;uint16 coralsL2;uint16 coralsL3;uint16 coralsL4;int8 target;bool locked;uint8 level;";
     }
 
     @Override

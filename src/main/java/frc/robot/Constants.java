@@ -101,7 +101,7 @@ public final class Constants {
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 3.5;
+      public static final double rotationKp = 2;
 
       /** kI used for the rotation PID drive controllers */
       public static final double rotationKi = 0;
@@ -110,10 +110,10 @@ public final class Constants {
       public static final double rotationKd = 0;
 
       /** Translation tolerance */
-      public static final double translationTolerance = Units.inchesToMeters(1.5);
+      public static final double translationTolerance = Units.inchesToMeters(1);
 
       /** Rotation tolerance */
-      public static final double rotationTolerance = Units.degreesToRadians(5);
+      public static final double rotationTolerance = Units.degreesToRadians(2);
     }
 
     /** PID configuration for path following controllers */

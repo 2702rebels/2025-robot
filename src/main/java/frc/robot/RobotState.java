@@ -333,6 +333,7 @@ public class RobotState {
   }
 
   /** Gets the scoring level for automatic scoring (1..4) */
+  @Logged(name = "ScoringLevel", importance = Importance.INFO)
   public int getScoringLevel() {
     return reefState.level > 0
         ? reefState.level
