@@ -55,6 +55,17 @@ public final class Constants {
     public static final int MOTOR_ELEVATOR_FOLLOWER = 16;
   }
 
+  /** RoboRIO DIO identifiers */
+  public static final class DioID {
+    public static final int SWITCH_CLIMB = 9;
+  }
+
+  /** RoboRIO PWM identifiers */
+  public static final class PwmID {
+    public static final int LED = 0;
+    public static final int SERVO_CLIMB = 9;
+  }
+
   public static final class RevConstants {
     /**
      * REV NEO550 motor constants
@@ -150,9 +161,6 @@ public final class Constants {
   }
 
   public static final class LedConstants {
-    /** PWM port on RoboRio */
-    public static final int PWM_PORT = 0;
-
     /* Total length of LED strip (number of addressable LEDs) */
     public static final int kLength = 39;
 

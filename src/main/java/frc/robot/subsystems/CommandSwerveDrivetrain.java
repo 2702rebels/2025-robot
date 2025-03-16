@@ -87,6 +87,12 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
           .withDriveRequestType(DriveRequestType.Velocity);
 
+  // swerve request for pointing wheels forward
+  private final SwerveRequest.PointWheelsAt wheelsForward =
+      new SwerveRequest.PointWheelsAt()
+          .withModuleDirection(Rotation2d.kZero)
+          .withDriveRequestType(DriveRequestType.Velocity);
+
   // swerve request to apply during field-centric path following
   private final SwerveRequest.ApplyFieldSpeeds pathApplyFieldSpeeds =
       new SwerveRequest.ApplyFieldSpeeds().withDriveRequestType(DriveRequestType.Velocity);
@@ -380,6 +386,15 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    */
   public Command brake() {
     return run(() -> setControl(brake));
+  }
+
+  /**
+   * Returns a command that sets wheels position forward.
+   *
+   * @return Command to run
+   */
+  public Command wheelsForward() {
+    return run(() -> setControl(wheelsForward));
   }
 
   /**

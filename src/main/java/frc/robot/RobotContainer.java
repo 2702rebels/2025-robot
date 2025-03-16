@@ -70,7 +70,11 @@ public class RobotContainer {
           Constants.CanID.MOTOR_MANIPULATOR_GUIDE, Constants.CanID.MOTOR_MANIPULATOR_CORAL);
 
   @Logged(name = "Climb", importance = Importance.INFO)
-  private final Climb climb = new Climb(Constants.CanID.MOTOR_CLIMB_WINCH);
+  private final Climb climb =
+      new Climb(
+          Constants.CanID.MOTOR_CLIMB_WINCH,
+          Constants.DioID.SWITCH_CLIMB,
+          Constants.PwmID.SERVO_CLIMB);
 
   @Logged(name = "Superstructure", importance = Importance.INFO)
   private final Superstructure superstructure = new Superstructure(elevator, pivot, manipulator);
@@ -81,7 +85,7 @@ public class RobotContainer {
   @Logged(name = "AprilTagDetector", importance = Importance.INFO)
   private final AprilTagDetector aprilTagDetector = new AprilTagDetector();
 
-  private final LedResource led = new LedResource(Constants.LedConstants.PWM_PORT);
+  private final LedResource led = new LedResource(Constants.PwmID.LED);
   private final LedFeedback ledFeedback = new LedFeedback(led, this::getDefaultLedFeedback);
   private final LedVision ledVision = new LedVision(led, this::getDefaultVisionFeedback);
 
@@ -110,6 +114,12 @@ public class RobotContainer {
   private final Trigger coralEjectButton =
       Constants.Settings.sysIdBindings ? disabled : controllerDriver.povDown();
 
+  private final Trigger climbReadyButton = controllerDriver.a();
+  private final Trigger climbEngageButton =
+      controllerDriver.a().and(state.shouldClimbReady).and(climb.isLocked);
+  private final Trigger climbResetButton =
+      controllerDriver.povDown().and(state.shouldClimbReady).and(climb.isLocked.negate());
+
   private final Trigger scoreButton = controllerDriver.rightTrigger();
   private final Trigger scoreManualButton = controllerDriver.rightBumper();
 
@@ -133,11 +143,14 @@ public class RobotContainer {
 
   // trigger for scoring coral auto or manually
   private final Trigger shouldInitiateCoralSequence =
-      state
-          .isAuto
-          .and(state.atScoringPose)
-          .debounce(0.25)
-          .or(scoreButton.debounce(0.5, DebounceType.kFalling));
+      scoreButton.debounce(0.5, DebounceType.kFalling);
+
+  // uncomment to revert back to automatic scoring sequence
+  //   state
+  //       .isAuto
+  //       .and(state.atScoringPose)
+  //       .debounce(0.25)
+  //       .or(scoreButton.debounce(0.5, DebounceType.kFalling));
 
   public RobotContainer() {
     // bind suppliers to the state
@@ -231,11 +244,10 @@ public class RobotContainer {
         new InstantCommand(
             () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
-    // controllerDriver.povLeft().onTrue(new InstantCommand(() -> climb.setWinchPosition(0),
-    // climb));
-    // controllerDriver
-    //     .povRight()
-    //     .onTrue(new InstantCommand(() -> climb.setWinchPosition(climbWinch.get()), climb));
+    // climbing
+    climbReadyButton.onTrue(state.setIntent(Intent.kClimbReady));
+    climbEngageButton.onTrue(state.setIntent(Intent.kClimbEngage));
+    climbResetButton.onTrue(state.setIntent(Intent.kNone).andThen(climb.reset()));
   }
 
   /** Use this method to configure trigger bindings. */
@@ -337,7 +349,7 @@ public class RobotContainer {
         .shouldScoreCoralL1
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL1)
-        .and(state.isAuto.or(scoreButton.debounce(0.5, DebounceType.kFalling)))
+        .and(scoreButton.debounce(0.5, DebounceType.kFalling))
         .whileTrue(manipulator.ejectCoral());
 
     // score coral via auto target
@@ -399,6 +411,16 @@ public class RobotContainer {
 
     // hover
     state.shouldHover.onTrue(superstructure.setPosition(Position.HOVER));
+
+    // climb
+    state.shouldClimbReady.onTrue(
+        superstructure.setPosition(Position.CLIMB).andThen(climb.ready()));
+
+    state
+        .shouldClimbEngage
+        .and(climb.isLocked)
+        .onTrue(
+            drivetrain.wheelsForward().withTimeout(Milliseconds.of(100)).andThen(climb.engage()));
 
     // [default behavior] stow when no intent is specified
     //

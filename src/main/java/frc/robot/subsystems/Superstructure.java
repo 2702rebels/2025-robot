@@ -52,6 +52,7 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kL2AlgaeAngle = 30;
   private static final double __kL3AlgaeAngle = 30;
   private static final double __kNetAngle = 45;
+  private static final double __kClimbAngle = 80;
 
   private static final double __kBranchOffset = 8;
 
@@ -158,6 +159,7 @@ public final class Superstructure extends SubsystemBase {
     EJECT_ALGAE,
     NET,
     HOVER, // special position to allow trapped game pieces to escape
+    CLIMB, // special position for climbing
   }
 
   /** Trigger for coral presence. */
@@ -366,6 +368,7 @@ public final class Superstructure extends SubsystemBase {
     positionProfiles.put(Position.NET, Pair.of(kNetHeight.get(), kNetAngle.get()));
     positionProfiles.put(Position.EJECT_ALGAE, Pair.of(kFloorHeight.get(), kEjectAlgaeAngle.get()));
     positionProfiles.put(Position.HOVER, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
+    positionProfiles.put(Position.CLIMB, Pair.of(kFloorHeight.get(), kClimbAngle.get()));
     // spotless:on
   }
 
@@ -406,6 +409,7 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kTransitionAlgaeAngle = profileValue("TransitionAlgaeAngle", __kTransitionAlgaeAngle);
   private static Tunable.DoubleValue kStowedAlgaeAngle = profileValue("StowedAlgaeAngle", __kStowedAlgaeAngle);
   private static Tunable.DoubleValue kEjectAlgaeAngle = profileValue("EjectAlgaeAngle", __kEjectAlgaeAngle);
+  private static Tunable.DoubleValue kClimbAngle = profileValue("ClimbAngle", __kClimbAngle);
   private static Tunable.DoubleValue kBranchOffset = profileValue("BranchOffset", __kBranchOffset);
 
   private static Tunable.DoubleValue kManualAngle = profileValue("Manual/Angle", 0);

@@ -179,6 +179,12 @@ public class RobotState {
 
     /** Eject algae into the processor */
     kAlgaeEject,
+
+    /** Prepare for climbing (deploy climber) */
+    kClimbReady,
+
+    /** Engage climber */
+    kClimbEngage,
   }
 
   public static enum ScoringStrategy {
@@ -295,6 +301,12 @@ public class RobotState {
 
   @Logged(name = "ShouldScoreAlgaeNet", importance = Importance.INFO)
   public final Trigger shouldScoreAlgaeNet = new Trigger(() -> intent == Intent.kAlgaeScoreNet);
+
+  @Logged(name = "ShouldClimbReady", importance = Importance.INFO)
+  public final Trigger shouldClimbReady = new Trigger(() -> intent == Intent.kClimbReady);
+
+  @Logged(name = "ShouldClimbEngage", importance = Importance.INFO)
+  public final Trigger shouldClimbEngage = new Trigger(() -> intent == Intent.kClimbEngage);
 
   @Logged(name = "Auto", importance = Importance.INFO)
   public final Trigger isAuto = new Trigger(() -> auto);
