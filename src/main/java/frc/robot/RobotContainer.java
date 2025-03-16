@@ -264,11 +264,6 @@ public class RobotContainer {
         new InstantCommand(
             () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
-    // controllerDriver.povDown().onTrue(new InstantCommand(() -> climb.setArmPosition(0), climb));
-    // controllerDriver
-    //     .povUp()
-    //     .onTrue(new InstantCommand(() -> climb.setArmPosition(climbArm.get()), climb));
-
     // controllerDriver.povLeft().onTrue(new InstantCommand(() -> climb.setWinchPosition(0),
     // climb));
     // controllerDriver
@@ -398,7 +393,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL2)
         .and(shouldInitiateCoralSequence)
-        .whileTrue(manipulator.ejectCoral());
+        .whileTrue(manipulator.ejectCoral().andThen(state.markScoringTarget()));
 
     state
         .shouldScoreCoralL3
@@ -410,7 +405,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL3)
         .and(shouldInitiateCoralSequence)
-        .whileTrue(manipulator.ejectCoral());
+        .whileTrue(manipulator.ejectCoral().andThen(state.markScoringTarget()));
 
     // scoring L4
     state
@@ -547,6 +542,7 @@ public class RobotContainer {
                 superstructure
                     .maintainPosition(Position.L4_SCORED)
                     .until(superstructure::isDoneScoringL4),
+                state.markScoringTarget(),
                 driveForward(Inches.of(-10)).withTimeout(1),
                 state.setIntent(Intent.kNone)));
   }

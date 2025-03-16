@@ -39,6 +39,9 @@ public class ReefState implements StructSerializable {
   /** Indicates that target is locked by the operator. */
   public boolean locked;
 
+  /** Selected reef level for scoring (1, 2, 3, 4) */
+  public byte level;
+
   /** Determines whether target position is marked as scored. */
   public boolean isTargetScored() {
     if (this.target < 12) {
@@ -71,6 +74,28 @@ public class ReefState implements StructSerializable {
     return false;
   }
 
+  /** Marks target position as as scored. */
+  public void markTargetScored(int target) {
+    if (target < 12) {
+      return;
+    }
+
+    final var level = target / 12;
+    final var index = target % 12;
+
+    switch (level) {
+      case 2:
+        coralsL2.set(index);
+        break;
+      case 3:
+        coralsL3.set(index);
+        break;
+      case 4:
+        coralsL4.set(index);
+        break;
+    }
+  }
+
   public ReefState() {
     // algae is preloaded
     algae = new BitSet(6);
@@ -82,6 +107,7 @@ public class ReefState implements StructSerializable {
     coralsL4 = new BitSet(12);
     target = -1;
     locked = false;
+    level = 0;
   }
 
   public ReefState(
@@ -91,7 +117,8 @@ public class ReefState implements StructSerializable {
       BitSet coralsL3,
       BitSet coralsL4,
       byte target,
-      boolean locked) {
+      boolean locked,
+      byte level) {
     this.algae = algae;
     this.coralsL1 = coralsL1;
     this.coralsL2 = coralsL2;
@@ -99,6 +126,7 @@ public class ReefState implements StructSerializable {
     this.coralsL4 = coralsL4;
     this.target = target;
     this.locked = locked;
+    this.level = level;
   }
 
   /** Returns bitset for the specified level index (1...3). */
@@ -142,12 +170,12 @@ public class ReefState implements StructSerializable {
 
     @Override
     public int getSize() {
-      return kSizeInt16 * 3 + kSizeInt8 * 3 + kSizeBool;
+      return kSizeInt16 * 3 + kSizeInt8 * 4 + kSizeBool;
     }
 
     @Override
     public String getSchema() {
-      return "uint8 algae;uint8 coralsL1;uint16 coralsL2;uint16 coralsL3;uint16 coralsL4;int8 target;bool locked;";
+      return "uint8 algae;uint8 coralsL1;uint16 coralsL2;uint16 coralsL3;uint16 coralsL4;int8 target;bool locked;byte level;";
     }
 
     @Override
@@ -159,7 +187,8 @@ public class ReefState implements StructSerializable {
           BitSet.valueOf(bb.slice(4, 2)),
           BitSet.valueOf(bb.slice(6, 2)),
           bb.get(8),
-          bb.get(9) == 1);
+          bb.get(9) == 1,
+          bb.get(10));
     }
 
     @Override
@@ -171,6 +200,7 @@ public class ReefState implements StructSerializable {
       bb.put(toByteArray(value.coralsL4, 12));
       bb.put(value.target);
       bb.put(value.locked ? (byte) 1 : (byte) 0);
+      bb.put(value.level);
     }
 
     /**

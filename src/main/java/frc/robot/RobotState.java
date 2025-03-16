@@ -88,6 +88,7 @@ public class RobotState {
 
   private Optional<Pose2d> targetPose = Optional.empty();
   private Optional<Pose2d> scoringPose = Optional.empty();
+  private int scoringTarget = -1;
 
   private boolean auto; // indicator of automatic scoring mode
 
@@ -331,16 +332,21 @@ public class RobotState {
     detectedObjectSupplier = value;
   }
 
-  /** Gets the score level for automatic scoring (1..4) */
-  public int getScoreLevel() {
-    return reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
+  /** Gets the scoring level for automatic scoring (1..4) */
+  public int getScoringLevel() {
+    return reefState.level > 0
+        ? reefState.level
+        : reefState.target > 0 ? (reefState.target / 12) + 1 : -1;
   }
 
   /** Commands intent of the robot. */
   public Command setIntent(Intent intent) {
     return Commands.runOnce(
             () -> {
-              final var scoringLevel = getScoreLevel();
+              final var scoringLevel = getScoringLevel();
+              if (scoringLevel <= 0) {
+                return;
+              }
 
               // if vision assist is enabled and we trust current pose
               // then try to acquire scoring pose based on the closest
@@ -348,8 +354,12 @@ public class RobotState {
               if (intent == Intent.kCoralScoreAuto
                   && visionAssist.get()
                   && isPoseTrusted.getAsBoolean()) {
-                scoringPose = getClosestScoringPose(robotPose, scoringLevel);
-                auto = scoringPose.isPresent();
+                final var scoringPoseAndTarget = getClosestScoringPose(robotPose, scoringLevel);
+                if (scoringPoseAndTarget.isPresent()) {
+                  auto = true;
+                  scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
+                  scoringTarget = scoringPoseAndTarget.get().getSecond();
+                }
               }
 
               if (intent == Intent.kCoralScoreAuto) {
@@ -370,6 +380,7 @@ public class RobotState {
               } else {
                 // reset scoring pose when intent is removed
                 scoringPose = Optional.empty();
+                scoringTarget = -1;
                 auto = false;
 
                 this.intent = intent;
@@ -380,7 +391,7 @@ public class RobotState {
 
   /**
    * Commands scoring at the specified level (2, 3, or 4) in auto mode, aborts if pose is not
-   * trusted
+   * trusted.
    */
   public Command scoreAuto(int level) {
     return Commands.runOnce(
@@ -389,8 +400,8 @@ public class RobotState {
             return;
           }
 
-          scoringPose = getClosestScoringPose(robotPose, level);
-          if (scoringPose.isEmpty()) {
+          final var scoringPoseAndTarget = getClosestScoringPose(robotPose, level);
+          if (scoringPoseAndTarget.isEmpty()) {
             return;
           }
 
@@ -407,6 +418,9 @@ public class RobotState {
             default:
               return; // abort
           }
+
+          scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
+          scoringTarget = scoringPoseAndTarget.get().getSecond();
           auto = true;
         });
   }
@@ -452,6 +466,17 @@ public class RobotState {
     return new InstantCommand(() -> auto = false);
   }
 
+  /** Command to mark scoring target as scored */
+  public Command markScoringTarget() {
+    return new InstantCommand(
+        () -> {
+          if (scoringTarget > 0 && auto) {
+            reefState.markTargetScored(scoringTarget);
+            scoringTarget = -1;
+          }
+        });
+  }
+
   /** Synchronizes operator's input with the robot's perspective. */
   private void pollReefState() {
     final var values = reefStateOperatorSubscriber.readQueueValues();
@@ -468,6 +493,7 @@ public class RobotState {
       reefState.coralsL4 = (BitSet) value.coralsL4.clone();
       reefState.target = value.target;
       reefState.locked = value.locked;
+      reefState.level = value.level;
     }
 
     // if target position is marked as scored, remove the target and the lock
@@ -630,7 +656,8 @@ public class RobotState {
   }
 
   /** Gets the closest scoring pose based on the closest reef faces. */
-  private Optional<Pose2d> getClosestScoringPose(Pose2d robotPose, int scoringLevel) {
+  private Optional<Pair<Pose2d, Integer>> getClosestScoringPose(
+      Pose2d robotPose, int scoringLevel) {
     final var scoringPoses =
         scoringLevel == 4 ? GameConstants.reefScoringPosesL4 : GameConstants.reefScoringPoses;
 
@@ -669,27 +696,34 @@ public class RobotState {
     final var position2a = getScoringPosition(face2 * 2, scoringPoses, robotXY, scoringLevel);
     final var position2b = getScoringPosition(face2 * 2 + 1, scoringPoses, robotXY, scoringLevel);
 
+    // target index
+    int target = -1;
+
     if (position1a.isPresent()) {
       currentPose = position1a.get().getFirst();
       distance = position1a.get().getSecond();
+      target = scoringLevel * 12 + face1 * 2;
     }
 
     if (position1b.isPresent() && (distance < 0 || position1b.get().getSecond() < distance)) {
       currentPose = position1b.get().getFirst();
       distance = position1b.get().getSecond();
+      target = scoringLevel * 12 + face1 * 2 + 1;
     }
 
     if (position2a.isPresent() && (distance < 0 || position2a.get().getSecond() < distance)) {
       currentPose = position2a.get().getFirst();
       distance = position2a.get().getSecond();
+      target = scoringLevel * 12 + face2 * 2;
     }
 
     if (position2b.isPresent() && (distance < 0 || position2b.get().getSecond() < distance)) {
       currentPose = position2b.get().getFirst();
       distance = position2b.get().getSecond();
+      target = scoringLevel * 12 + face2 * 2 + 1;
     }
 
-    return Optional.ofNullable(currentPose);
+    return currentPose != null ? Optional.of(Pair.of(currentPose, target)) : Optional.empty();
   }
 
   /** Returns indexed scoring position from a list of poses and the distance to it. */
