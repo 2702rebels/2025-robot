@@ -15,8 +15,10 @@ import com.pathplanner.lib.commands.FollowPathCommand;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.path.PathPlannerPath;
 import com.pathplanner.lib.util.DriveFeedforwards;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
@@ -39,7 +41,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * Class that extends the Phoenix 6 SwerveDrivetrain class and implements Subsystem so it can easily
+ * Class that extends the Phoenix 6 SwerveDrivetrain class and implements subsystem so it can easily
  * be used in command-based projects.
  */
 public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Subsystem {
@@ -47,7 +49,24 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   private Notifier simNotifier = null;
   private double lastSimTime;
 
-  private static final ChassisSpeeds ZeroSpeeds = new ChassisSpeeds();
+  // kSpeedAt12Volts desired top speed
+  private static final double maxSpeedMetersPerSecond = DriveConstants.maxSpeed.in(MetersPerSecond);
+  private static final double maxAngularRateRadiansPerSecond =
+      DriveConstants.maxAngularRate.in(RadiansPerSecond);
+
+  private static double kControllerDeadband = 0; // e.g. 0.05 for 5%
+  private static double kAccelerationRateLimit = 1; // 100% in 1 second
+  private static double kDecelarationRateLimit = 5; // 100% in 200 ms
+
+  // teleop slew rate limiter for linear speed
+  private final SlewRateLimiter teleopVelocityLimiter =
+      new SlewRateLimiter(kAccelerationRateLimit, -kDecelarationRateLimit, 0);
+
+  // teleop slew rate limiter for rotational speed (omega)
+  private final SlewRateLimiter teleopRotationLimiter =
+      new SlewRateLimiter(kAccelerationRateLimit, -kDecelarationRateLimit, 0);
+
+  private static final ChassisSpeeds kZeroSpeeds = new ChassisSpeeds();
 
   // Blue alliance sees forward as 0 degrees (toward red alliance wall)
   private static final Rotation2d kBlueAlliancePerspectiveRotation = Rotation2d.kZero;
@@ -60,6 +79,13 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
   // swerve request to apply for brake position (X configuration)
   private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+
+  // swerve request for teleop driving
+  private final SwerveRequest.FieldCentric drive =
+      new SwerveRequest.FieldCentric()
+          .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
+          .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
+          .withDriveRequestType(DriveRequestType.Velocity);
 
   // swerve request to apply during field-centric path following
   private final SwerveRequest.ApplyFieldSpeeds pathApplyFieldSpeeds =
@@ -316,7 +342,35 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    * @return Command to run
    */
   public Command applyRequest(Supplier<SwerveRequest> requestSupplier) {
-    return run(() -> this.setControl(requestSupplier.get()));
+    return run(() -> setControl(requestSupplier.get()));
+  }
+
+  /**
+   * Returns a command that applies specified teleop inputs to this drivetrain.
+   *
+   * @param vxSupplier X velocity supplier (m/s)
+   * @param vySupplier Y velocity supplier (m/s)
+   * @param omegaSupplier Omega supplier (rad/s)
+   * @return Command to run
+   */
+  public Command driveTeleop(
+      Supplier<Double> vxSupplier, Supplier<Double> vySupplier, Supplier<Double> omegaSupplier) {
+    return run(
+        () -> {
+          final var vx = vxSupplier.get();
+          final var vy = vySupplier.get();
+          final var w = omegaSupplier.get();
+
+          // apply velocity rate limiter
+          final var heading = Math.atan2(vx, vy);
+          final var v = MathUtil.clamp(teleopVelocityLimiter.calculate(Math.hypot(vx, vy)), -1, 1);
+
+          driveAt(
+              v * Math.sin(heading) * maxSpeedMetersPerSecond,
+              v * Math.cos(heading) * maxSpeedMetersPerSecond,
+              MathUtil.clamp(Math.signum(w) * teleopRotationLimiter.calculate(Math.abs(w)), -1, 1)
+                  * maxAngularRateRadiansPerSecond);
+        });
   }
 
   /**
@@ -325,7 +379,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    * @return Command to run
    */
   public Command brake() {
-    return run(() -> this.setControl(brake));
+    return run(() -> setControl(brake));
   }
 
   /**
@@ -404,9 +458,18 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     setControl(pathApplyRobotSpeeds.withSpeeds(speeds));
   }
 
+  /**
+   * Drives with the specified input velocities and omega.
+   *
+   * <p>Use this version for teleop control.
+   */
+  public void driveAt(double vx, double vy, double omega) {
+    setControl(drive.withVelocityX(vx).withVelocityY(vy).withRotationalRate(omega));
+  }
+
   /** Stops the robot by setting speeds to zero. */
   public void stop() {
-    driveAt(ZeroSpeeds);
+    driveAt(kZeroSpeeds);
   }
 
   /**

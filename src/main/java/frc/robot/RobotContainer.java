@@ -8,14 +8,11 @@ import static edu.wpi.first.units.Units.*;
 
 import choreo.auto.AutoChooser;
 import choreo.auto.AutoFactory;
-import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
-import com.ctre.phoenix6.swerve.SwerveRequest;
 import dev.doglog.DogLog;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
-import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.units.measure.Distance;
@@ -30,7 +27,6 @@ import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
-import frc.robot.Constants.DriveConstants;
 import frc.robot.RobotState.Intent;
 import frc.robot.commands.DriveToPose;
 import frc.robot.generated.TunerConstants;
@@ -49,20 +45,6 @@ import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.Superstructure.Position;
 
 public class RobotContainer {
-  // kSpeedAt12Volts desired top speed
-  private static final double maxSpeedMetersPerSecond = DriveConstants.maxSpeed.in(MetersPerSecond);
-  private static final double maxAngularRateRadiansPerSecond =
-      DriveConstants.maxAngularRate.in(RadiansPerSecond);
-
-  private static double kControllerDeadband = 0; // e.g. 0.05 for 5%
-
-  // setting up bindings for necessary control of the swerve drive platform
-  private final SwerveRequest.FieldCentric drive =
-      new SwerveRequest.FieldCentric()
-          .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
-          .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
-          .withDriveRequestType(DriveRequestType.Velocity);
-
   private final RobotState state = RobotState.getInstance();
 
   private final Telemetry logger = new Telemetry(Constants.Settings.loggingEnabled);
@@ -150,10 +132,6 @@ public class RobotContainer {
           .debounce(0.25)
           .or(scoreButton.debounce(0.5, DebounceType.kFalling));
 
-  // slew rate limiter
-  private final SlewRateLimiter velocityLimiter = new SlewRateLimiter(1, -5, 0);
-  private final SlewRateLimiter rotationLimiter = new SlewRateLimiter(1, -5, 0);
-
   public RobotContainer() {
     // bind suppliers to the state
     state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
@@ -193,31 +171,13 @@ public class RobotContainer {
       // and Y is defined as to the left according to WPILib convention.
       drivetrain.setDefaultCommand(
           // drivetrain will execute this command periodically
-          drivetrain.applyRequest(
-              () -> {
-                // drive forward with negative Y (forward)
-                var vx = -smoothInput(controllerDriver.getLeftY());
-                // drive left with negative X (left)
-                var vy = -smoothInput(controllerDriver.getLeftX());
-                // drive counterclockwise with negative X (left)
-                var w = -smoothInput(controllerDriver.getRightX());
-
-                // apply rate limiter
-                final var heading = Math.atan2(vx, vy);
-                final var v = MathUtil.clamp(velocityLimiter.calculate(Math.hypot(vx, vy)), -1, 1);
-
-                vx = v * Math.sin(heading);
-                vy = v * Math.cos(heading);
-
-                return drive
-                    .withVelocityX(vx * maxSpeedMetersPerSecond)
-                    .withVelocityY(vy * maxSpeedMetersPerSecond)
-                    .withRotationalRate(
-                        MathUtil.clamp(
-                                Math.signum(w) * rotationLimiter.calculate(Math.abs(w)), -1, 1)
-                            * maxAngularRateRadiansPerSecond
-                            * (precisionRotation.getAsBoolean() ? preciseRotation.get() : 1));
-              }));
+          drivetrain.driveTeleop(
+              // drive forward with negative Y (forward)
+              () -> -smoothInput(controllerDriver.getLeftY()),
+              // drive left with negative X (left)
+              () -> -smoothInput(controllerDriver.getLeftX()),
+              // drive counterclockwise with negative X (left)
+              () -> -smoothInput(controllerDriver.getRightX()) * getOmegaModifier()));
     }
 
     resetOrientationButton.onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
@@ -572,6 +532,10 @@ public class RobotContainer {
         Commands.runOnce(() -> controllerDriver.getHID().setRumble(RumbleType.kBothRumble, 1.0)),
         Commands.waitTime(time),
         Commands.runOnce(() -> controllerDriver.getHID().setRumble(RumbleType.kBothRumble, 0.0)));
+  }
+
+  private double getOmegaModifier() {
+    return precisionRotation.getAsBoolean() ? preciseRotation.get() : 1;
   }
 
   // spotless:off
