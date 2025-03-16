@@ -47,7 +47,6 @@ public final class Constants {
     public static final int MOTOR_MANIPULATOR_CORAL = 14;
     public static final int MOTOR_MANIPULATOR_GUIDE = 15;
     public static final int MOTOR_CLIMB_WINCH = 16;
-    public static final int MOTOR_CLIMB_ARM = 17;
   }
 
   /** CANivore identifiers */

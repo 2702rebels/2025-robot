@@ -16,60 +16,28 @@ import frc.robot.lib.Tunable;
 public final class Climb extends SubsystemBase {
   // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
   // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
-  private static final double __kArmP = 0.05;
-  private static final double __kArmD = 0;
-  private static final double __kWinchP = 0.15;
-  private static final double __kWinchD = 0;
+  private static final double __kP = 0.15;
+  private static final double __kD = 0;
 
-  private static final double conversionFactorArm = 360 / 100; // to degrees, 100:1 reduction ratio
-  private static final double conversionFactorWinch =
+  private static final double conversionFactor =
       Math.PI * 3 / 50; // 3" diameter, 50:1 reduction ratio
 
-  @Logged(name = "Arm", importance = Importance.INFO)
-  private final LoggedSparkMax motorArm;
-
   @Logged(name = "Winch", importance = Importance.INFO)
-  private final LoggedSparkMax motorWinch;
+  private final LoggedSparkMax motor;
 
-  private final RelativeEncoder encoderArm;
-  private final RelativeEncoder encoderWinch;
-  private final SparkClosedLoopController controllerArm;
-  private final SparkClosedLoopController controllerWinch;
+  private final RelativeEncoder encoder;
+  private final SparkClosedLoopController controller;
 
-  // tolerance arm (degrees)
-  private static final double toleranceArm = 3;
+  // tolerance (inches)
+  private static final double tolerance = 0.5;
 
-  // tolerance winch (inches)
-  private static final double toleranceWinch = 0.5;
+  @Logged(name = "Setpoint", importance = Importance.INFO)
+  private double setpoint;
 
-  @Logged(name = "Arm/Setpoint", importance = Importance.INFO)
-  private double setpointArm;
-
-  @Logged(name = "Winch/Setpoint", importance = Importance.INFO)
-  private double setpointWinch;
-
-  public Climb(int armCanID, int winchCanID) {
-    motorArm =
+  public Climb(int canID) {
+    motor =
         new LoggedSparkMax(
-            armCanID,
-            (config) -> {
-              config.smartCurrentLimit(30).voltageCompensation(12).idleMode(IdleMode.kBrake);
-
-              config.signals.primaryEncoderPositionAlwaysOn(true);
-
-              config
-                  .closedLoop
-                  .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-                  .velocityFF(0)
-                  .p(__kArmP)
-                  .d(__kArmD);
-
-              config.encoder.positionConversionFactor(conversionFactorArm);
-            });
-
-    motorWinch =
-        new LoggedSparkMax(
-            winchCanID,
+            canID,
             (config) -> {
               config
                   .smartCurrentLimit(60)
@@ -83,66 +51,44 @@ public final class Climb extends SubsystemBase {
                   .closedLoop
                   .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                   .velocityFF(0)
-                  .p(__kWinchP)
-                  .d(__kWinchD);
+                  .p(__kP)
+                  .d(__kD);
 
-              config.encoder.positionConversionFactor(conversionFactorWinch);
+              config.encoder.positionConversionFactor(conversionFactor);
             });
 
-    encoderArm = motorArm.getEncoder();
-    encoderWinch = motorWinch.getEncoder();
-    controllerArm = motorArm.getClosedLoopController();
-    controllerWinch = motorWinch.getClosedLoopController();
+    encoder = motor.getEncoder();
+    controller = motor.getClosedLoopController();
 
     // make configuration tunable (must be done after configuration is bound to the motor)
-    Tunable.bind("Climb/Arm", motorArm, ClosedLoopSlot.kSlot0);
-    Tunable.bind("Climb/Winch", motorWinch, ClosedLoopSlot.kSlot0);
+    Tunable.bind("Climb", motor, ClosedLoopSlot.kSlot0);
 
     reset();
   }
 
   @Override
   public void periodic() {
-    controllerArm.setReference(setpointArm, ControlType.kPosition, ClosedLoopSlot.kSlot0);
-    controllerWinch.setReference(setpointWinch, ControlType.kPosition, ClosedLoopSlot.kSlot0);
+    controller.setReference(setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0);
   }
 
   public void reset() {
-    encoderArm.setPosition(0);
-    encoderWinch.setPosition(0);
+    encoder.setPosition(0);
   }
 
-  public void setArmPosition(double value) {
-    setpointArm = value;
+  public void setPosition(double value) {
+    setpoint = value;
   }
 
-  public boolean isArmAtPosition(double value) {
-    return isArmAtPosition(value, toleranceArm);
+  public boolean isAtPosition(double value) {
+    return isAtPosition(value, tolerance);
   }
 
-  public boolean isArmAtPosition(double value, double tolerance) {
-    return MathUtil.isNear(value, getArmPosition(), tolerance);
+  public boolean isAtPosition(double value, double tolerance) {
+    return MathUtil.isNear(value, getPosition(), tolerance);
   }
 
-  @Logged(name = "Arm/Position", importance = Importance.INFO)
-  public double getArmPosition() {
-    return encoderArm.getPosition();
-  }
-
-  public void setWinchPosition(double value) {
-    setpointWinch = value;
-  }
-
-  public boolean isWinchAtPosition(double value) {
-    return isWinchAtPosition(value, toleranceWinch);
-  }
-
-  public boolean isWinchAtPosition(double value, double tolerance) {
-    return MathUtil.isNear(value, getWinchPosition(), tolerance);
-  }
-
-  @Logged(name = "Winch/Position", importance = Importance.INFO)
-  public double getWinchPosition() {
-    return encoderWinch.getPosition();
+  @Logged(name = "Position", importance = Importance.INFO)
+  public double getPosition() {
+    return encoder.getPosition();
   }
 }

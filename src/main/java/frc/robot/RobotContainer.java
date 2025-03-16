@@ -88,8 +88,7 @@ public class RobotContainer {
           Constants.CanID.MOTOR_MANIPULATOR_GUIDE, Constants.CanID.MOTOR_MANIPULATOR_CORAL);
 
   @Logged(name = "Climb", importance = Importance.INFO)
-  private final Climb climb =
-      new Climb(Constants.CanID.MOTOR_CLIMB_ARM, Constants.CanID.MOTOR_CLIMB_WINCH);
+  private final Climb climb = new Climb(Constants.CanID.MOTOR_CLIMB_WINCH);
 
   @Logged(name = "Superstructure", importance = Importance.INFO)
   private final Superstructure superstructure = new Superstructure(elevator, pivot, manipulator);
