@@ -208,6 +208,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
       startSimThread();
     }
 
+    pathXController.setTolerance(Constants.DriveConstants.PathFollowing.translationTolerance);
+    pathYController.setTolerance(Constants.DriveConstants.PathFollowing.translationTolerance);
+    pathThetaController.setTolerance(Constants.DriveConstants.PathFollowing.rotationTolerance);
+
     Tunable.bind("Drive/PathX", pathXController);
     Tunable.bind("Drive/PathY", pathYController);
     Tunable.bind("Drive/PathTheta", pathThetaController);

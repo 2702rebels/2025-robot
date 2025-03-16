@@ -1,14 +1,18 @@
 package frc.robot;
 
-import com.ctre.phoenix6.swerve.SwerveDrivetrain.SwerveDriveState;
+import com.ctre.phoenix6.Utils;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.Pair;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.numbers.N1;
+import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -30,11 +34,10 @@ import frc.robot.lib.TimestampedCircularBuffer;
 import frc.robot.lib.TimestampedTranslation2d;
 import frc.robot.lib.Tunable;
 import frc.robot.lib.VisionState;
+import frc.robot.subsystems.CommandSwerveDrivetrain;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class RobotState {
@@ -49,7 +52,6 @@ public class RobotState {
   private static final int kCoralsPerLevel = 12;
 
   private static final long kVisionCutoff = 60 * 1000; // microseconds
-  private static final long kVisionRecent = 30 * 1000; // microseconds
 
   private static final double kStationarySpeedTolerance = 0.05; // 5 cm/sec
   private static final double kStationaryOmegaTolerance = Units.degreesToRadians(5); // 5 deg/sec
@@ -59,20 +61,19 @@ public class RobotState {
   private static final double kOdometryTrustThreshold = 0.8;
   private static final double kOdometryTrustPenalty = 0.05;
 
+  // std.dev for vision: we do trust vision so set these relatively low
+  private static final Matrix<N3, N1> kVisionStdDevs =
+      VecBuilder.fill(
+          Units.inchesToMeters(0.5), Units.inchesToMeters(0.5), Units.degreesToRadians(5));
+
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
 
   // timestamped log of recently measured (within last second) chassis speeds
   private final TimestampedCircularBuffer<ChassisSpeeds> chassisSpeeds =
       new TimestampedCircularBuffer<>(50);
 
-  // external supplier of observed historical robot poses
-  private Function<Long, Optional<Pose2d>> historicalPoseSupplier;
-
-  // external drive state supplier
-  private Supplier<SwerveDriveState> driveStateSupplier;
-
-  // external odometry pose reset
-  private Consumer<Pose2d> odometryPoseReset;
+  // bound drivetrain
+  private CommandSwerveDrivetrain drivetrain;
 
   // external vision state supplier
   private Supplier<VisionState> visionStateSupplier;
@@ -83,8 +84,6 @@ public class RobotState {
   private long visionPoseTimestamp = -1;
   private long coralPoseTimestamp = -1;
 
-  private Pose2d robotPose = Pose2d.kZero;
-  private Pose2d odometryPose = Pose2d.kZero;
   private Pose2d visionPose = Pose2d.kZero;
   private Pose2d coralPose = Pose2d.kZero;
 
@@ -213,13 +212,7 @@ public class RobotState {
   /** Fused robot pose */
   @Logged(name = "RobotPose", importance = Importance.INFO)
   public Pose2d getRobotPose() {
-    return robotPose;
-  }
-
-  /** Odometry robot pose */
-  @Logged(name = "OdometryPose", importance = Importance.INFO)
-  public Pose2d getOdometryPose() {
-    return odometryPose;
+    return drivetrain.getPose();
   }
 
   /** Vision robot pose */
@@ -321,19 +314,10 @@ public class RobotState {
   public final Trigger atScoringPose = new Trigger(this::isAtScoringPose);
   // spotless:on
 
-  /** Binds external historical pose supplier. */
-  public void setHistoricalPoseSupplier(Function<Long, Optional<Pose2d>> value) {
-    historicalPoseSupplier = value;
-  }
-
-  /** Binds external drive state supplier. */
-  public void setDriveStateSupplier(Supplier<SwerveDriveState> value) {
-    driveStateSupplier = value;
-  }
-
-  /** Binds external odometry pose reset. */
-  public void setOdometryPoseReset(Consumer<Pose2d> value) {
-    odometryPoseReset = value;
+  /** Binds drivetrain. */
+  public void bind(CommandSwerveDrivetrain drivetrain) {
+    this.drivetrain = drivetrain;
+    this.drivetrain.setVisionMeasurementStdDevs(kVisionStdDevs);
   }
 
   /** Binds external vision state supplier. */
@@ -369,7 +353,9 @@ public class RobotState {
               if (intent == Intent.kCoralScoreAuto
                   && visionAssist.get()
                   && isPoseTrusted.getAsBoolean()) {
-                final var scoringPoseAndTarget = getClosestScoringPose(robotPose, scoringLevel);
+                final var scoringPoseAndTarget =
+                    getClosestScoringPose(getRobotPose(), scoringLevel);
+
                 if (scoringPoseAndTarget.isPresent()) {
                   auto = true;
                   scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
@@ -415,7 +401,7 @@ public class RobotState {
             return;
           }
 
-          final var scoringPoseAndTarget = getClosestScoringPose(robotPose, level);
+          final var scoringPoseAndTarget = getClosestScoringPose(getRobotPose(), level);
           if (scoringPoseAndTarget.isEmpty()) {
             return;
           }
@@ -458,6 +444,7 @@ public class RobotState {
   /** Determines whether robot is at the scoring pose. */
   public boolean isAtScoringPose() {
     if (scoringPose.isPresent()) {
+      final var robotPose = getRobotPose();
       final var _scoringPose = scoringPose.get();
 
       final var d = _scoringPose.getTranslation().getDistance(robotPose.getTranslation());
@@ -524,9 +511,7 @@ public class RobotState {
   /** Resets odometry pose and restores trust. */
   private void resetOdometryPose(Pose2d pose) {
     odometryTrust = 1;
-    odometryPose = pose;
-    odometryPoseReset.accept(pose);
-    robotPose = pose;
+    drivetrain.resetPose(pose);
   }
 
   /** Sets robot pose to a known pose and restores trust. */
@@ -550,11 +535,9 @@ public class RobotState {
     boolean isRobotSlow = false;
 
     // poll odometry
-    if (driveStateSupplier != null) {
-      final var driveState = driveStateSupplier.get();
-      odometryPose = driveState.Pose;
-
-      final var rotation = robotPose.getRotation();
+    if (drivetrain != null) {
+      final var driveState = drivetrain.getState();
+      final var rotation = driveState.Pose.getRotation();
       final var robotSpeeds = driveState.Speeds;
       final var fieldSpeeds = ChassisSpeeds.fromRobotRelativeSpeeds(robotSpeeds, rotation);
       chassisSpeeds.enqueue(timestamp, fieldSpeeds);
@@ -597,20 +580,15 @@ public class RobotState {
       }
     }
 
-    // compute fused robot pose from vision and odometry
+    // fuse robot pose with vision
     if (visionPoseTimestamp > 0 && visionPoseTimestamp > timestamp - kVisionCutoff) {
       // reset robot pose to vision pose when moving slowly and odometry is not trusted
       if (isRobotSlow && odometryTrust < kOdometryTrustThreshold) {
         resetOdometryPose(visionPose);
       } else {
-        // interpolate only if the vision timestamp is really fresh
-        robotPose =
-            visionPoseTimestamp > timestamp - kVisionRecent
-                ? visionPose.interpolate(odometryPose, odometryTrust)
-                : odometryPose;
+        drivetrain.addVisionMeasurement(
+            visionPose, Utils.fpgaToCurrentTime(visionPoseTimestamp / 1000000.0));
       }
-    } else {
-      robotPose = odometryPose;
     }
 
     // poll detected objects
@@ -621,6 +599,7 @@ public class RobotState {
         final var vectorToCoral = detectedObject.value();
 
         // determine pose of the coral based on the robot pose and heading
+        final var robotPose = getRobotPose();
         coralPoseTimestamp = newDetectedObjectTimestamp;
         coralPose =
             new Pose2d(
@@ -789,9 +768,9 @@ public class RobotState {
     return chassisSpeeds.findAt(timestamp);
   }
 
-  /** Returns observed odometry pose at the specified timestamp. */
+  /** Returns observed pose at the specified timestamp. */
   public Optional<Pose2d> getOdometryPoseAt(long timestamp) {
-    return historicalPoseSupplier.apply(timestamp);
+    return drivetrain != null ? drivetrain.getPoseAt(timestamp) : Optional.empty();
   }
 
   public static final Tunable.BooleanValue visionAssist =

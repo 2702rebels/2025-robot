@@ -178,7 +178,7 @@ public class DriveToPose extends Command {
     final var setpointPose =
         new Pose2d(setpointTranslation, new Rotation2d(distanceController.getSetpoint().position));
 
-    if (Constants.Settings.loggingEnabled) {
+    if (Constants.Settings.rioLoggingEnabled) {
       DogLog.log("DriveToPose/Setpoint", setpointPose);
       DogLog.log("DriveToPose/Goal", desiredPose);
       DogLog.log("DriveToPose/DistanceMeasured", distance);

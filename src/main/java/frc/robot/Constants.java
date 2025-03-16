@@ -13,8 +13,14 @@ import frc.robot.generated.TunerConstants;
 
 public final class Constants {
   public static final class Settings {
-    /** Logging */
-    public static final boolean loggingEnabled = true;
+    /** RIO Logging */
+    public static final boolean rioLoggingEnabled = true;
+
+    /** Epilogue Logging */
+    public static final boolean epilogueLoggingEnabled = true;
+
+    /** CTRE Logging */
+    public static final boolean ctreLoggingEnabled = false;
 
     /** Logging timing stats */
     public static final boolean statsEnabled = true;
@@ -154,6 +160,12 @@ public final class Constants {
       /** PP PID constants for rotation controllers */
       public static final PIDConstants rotationPID =
           new PIDConstants(rotationKp, rotationKi, rotationKd);
+
+      /** Translation tolerance */
+      public static final double translationTolerance = Units.inchesToMeters(1);
+
+      /** Rotation tolerance */
+      public static final double rotationTolerance = Units.degreesToRadians(2);
     }
 
     /** PP robot configuration */

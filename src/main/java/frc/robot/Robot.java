@@ -40,7 +40,7 @@ public class Robot extends TimedRobot {
     vision = Vision.getInstance();
     robotContainer = new RobotContainer();
 
-    if (Constants.Settings.loggingEnabled) {
+    if (Constants.Settings.rioLoggingEnabled) {
       DataLogManager.start(); // required for Epilogue data to be logged to disk
 
       DogLog.setOptions(
@@ -57,22 +57,24 @@ public class Robot extends TimedRobot {
       DogLog.log("Metadata/GitDate", BuildConstants.GIT_DATE);
       DogLog.log("Metadata/GitBranch", BuildConstants.GIT_BRANCH);
 
-      // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
-      Epilogue.configure(
-          config -> {
-            config.root = "/Robot";
+      if (Constants.Settings.epilogueLoggingEnabled) {
+        // https://docs.wpilib.org/en/stable/docs/software/telemetry/robot-telemetry-with-annotations.html
+        Epilogue.configure(
+            config -> {
+              config.root = "/Robot";
 
-            if (isSimulation()) {
-              // if running in simulation, then we'd want to re-throw any errors that
-              // occur so we can debug and fix them!
-              config.errorHandler = ErrorHandler.crashOnError();
-            }
+              if (isSimulation()) {
+                // if running in simulation, then we'd want to re-throw any errors that
+                // occur so we can debug and fix them!
+                config.errorHandler = ErrorHandler.crashOnError();
+              }
 
-            // change to CRITICAL for more detailed logging (where supported)
-            config.minimumImportance = Logged.Importance.DEBUG;
-          });
+              // change to CRITICAL for more detailed logging (where supported)
+              config.minimumImportance = Logged.Importance.DEBUG;
+            });
 
-      Epilogue.bind(this);
+        Epilogue.bind(this);
+      }
     } else {
       DogLog.setEnabled(false);
     }

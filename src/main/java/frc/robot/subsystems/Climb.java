@@ -41,6 +41,7 @@ public final class Climb extends SubsystemBase {
   private final Servo ratchet;
   private final DigitalInput limitSwitch;
   private boolean holding;
+  private boolean locked;
 
   // tolerance (inches)
   private static final double tolerance = 0.5;
@@ -79,7 +80,7 @@ public final class Climb extends SubsystemBase {
 
     limitSwitch = new DigitalInput(switchID);
     ratchet = new Servo(servoID);
-    isLocked = new Trigger(() -> !limitSwitch.get());
+    isLocked = new Trigger(() -> locked || !limitSwitch.get());
 
     holding = true;
     resetPosition();
@@ -91,6 +92,11 @@ public final class Climb extends SubsystemBase {
     if (holding) {
       hold();
     } else {
+      // set locked mode once we see switch hit
+      if (!limitSwitch.get()) {
+        locked = true;
+      }
+
       controller.setReference(setpoint, ControlType.kPosition, ClosedLoopSlot.kSlot0);
     }
   }
@@ -161,6 +167,13 @@ public final class Climb extends SubsystemBase {
           holding = false;
           engageRatchet();
           setPosition(-engagedPosition.get());
+        });
+  }
+
+  public Command setLocked() {
+    return runOnce(
+        () -> {
+          locked = true;
         });
   }
 

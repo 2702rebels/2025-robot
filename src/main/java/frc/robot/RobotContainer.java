@@ -47,7 +47,7 @@ import frc.robot.subsystems.Superstructure.Position;
 public class RobotContainer {
   private final RobotState state = RobotState.getInstance();
 
-  private final Telemetry logger = new Telemetry(Constants.Settings.loggingEnabled);
+  private final Telemetry logger = new Telemetry(Constants.Settings.ctreLoggingEnabled);
 
   private final CommandXboxController controllerDriver = new CommandXboxController(0);
 
@@ -94,6 +94,7 @@ public class RobotContainer {
   private boolean pivotEncoderValid = false;
 
   private static final Trigger disabled = new Trigger(() -> false);
+  private static final Trigger isAutonomousMode = new Trigger(DriverStation::isAutonomousEnabled);
 
   private final AutoFactory autoFactory;
   private final AutoRoutines autoRoutines;
@@ -112,7 +113,9 @@ public class RobotContainer {
   private final Trigger hoverButton =
       Constants.Settings.sysIdBindings ? disabled : controllerDriver.povUp();
   private final Trigger coralEjectButton =
-      Constants.Settings.sysIdBindings ? disabled : controllerDriver.povDown();
+      Constants.Settings.sysIdBindings
+          ? disabled
+          : controllerDriver.povDown().and(state.shouldClimbReady.negate());
 
   private final Trigger climbReadyButton = controllerDriver.a();
   private final Trigger climbEngageButton =
@@ -142,23 +145,20 @@ public class RobotContainer {
                   || !MathUtil.isNear(0, controllerDriver.getRightX(), kDriverTolerance));
 
   // trigger for scoring coral auto or manually
+  // NOTE: change to "isAutonomousMode.or(isAuto)" to allow robot to auto score,
+  // right now it will wait for the score button to be pressed in teleop
   private final Trigger shouldInitiateCoralSequence =
-      scoreButton.debounce(0.5, DebounceType.kFalling);
-
-  // uncomment to revert back to automatic scoring sequence
-  //   state
-  //       .isAuto
-  //       .and(state.atScoringPose)
-  //       .debounce(0.25)
-  //       .or(scoreButton.debounce(0.5, DebounceType.kFalling));
+      isAutonomousMode
+          .and(state.atScoringPose)
+          .debounce(0.25)
+          .or(scoreButton.debounce(0.5, DebounceType.kFalling));
 
   public RobotContainer() {
+    state.bind(drivetrain);
+
     // bind suppliers to the state
-    state.setHistoricalPoseSupplier(drivetrain::getPoseAt);
     state.setVisionStateSupplier(aprilTagDetector::getState);
     state.setDetectedObjectSupplier(objectDetector::getDetectedObject);
-    state.setDriveStateSupplier(drivetrain::getState);
-    state.setOdometryPoseReset(drivetrain::resetPose);
 
     autoFactory = drivetrain.createAutoFactory();
     autoRoutines = new AutoRoutines(autoFactory);
@@ -349,7 +349,7 @@ public class RobotContainer {
         .shouldScoreCoralL1
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL1)
-        .and(scoreButton.debounce(0.5, DebounceType.kFalling))
+        .and(scoreManualButton.debounce(0.5, DebounceType.kFalling))
         .whileTrue(manipulator.ejectCoral());
 
     // score coral via auto target
