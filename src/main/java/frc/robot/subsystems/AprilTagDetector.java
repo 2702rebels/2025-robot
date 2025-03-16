@@ -75,23 +75,32 @@ public class AprilTagDetector {
     return latency.get() / 1000.0;
   }
 
-  /** Returns snapshot of the vision state. */
+  /** Returns snapshot of the vision state without AprilTags. */
   public synchronized VisionState getState() {
+    return getState(false);
+  }
+
+  /** Returns snapshot of the vision state. */
+  public synchronized VisionState getState(boolean includeAprilTags) {
     final var estimatedPose =
         pose.timestamp <= 0
             ? noPose
             : new TimestampedValue<>(
                 pose.timestamp, new Pose2d(pose.x, pose.y, Rotation2d.fromRadians(pose.theta)));
 
-    final var estimatedTags = new TimestampedTranslation2d[22];
-    for (var i = 0; i < estimatedTags.length; ++i) {
-      estimatedTags[i] =
-          tags[i].timestamp <= 0
-              ? noTag
-              : new TimestampedTranslation2d(
-                  tags[i].timestamp, new Translation2d(tags[i].x, tags[i].y));
-    }
+    if (includeAprilTags) {
+      final var estimatedTags = new TimestampedTranslation2d[22];
+      for (var i = 0; i < estimatedTags.length; ++i) {
+        estimatedTags[i] =
+            tags[i].timestamp <= 0
+                ? noTag
+                : new TimestampedTranslation2d(
+                    tags[i].timestamp, new Translation2d(tags[i].x, tags[i].y));
+      }
 
-    return new VisionState(estimatedPose, estimatedTags);
+      return new VisionState(estimatedPose, estimatedTags);
+    } else {
+      return new VisionState(estimatedPose);
+    }
   }
 }

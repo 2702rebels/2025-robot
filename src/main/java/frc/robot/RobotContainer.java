@@ -344,7 +344,9 @@ public class RobotContainer {
     state
         .isAuto
         .and(state.hasScoringPose)
-        .onTrue(new DriveToPose(drivetrain, () -> state.getScoringPose()).until(hasDriverInput));
+        .onTrue(
+            new DriveToPose(drivetrain, state::getScoringPose, state::getRobotPose)
+                .until(hasDriverInput));
 
     // reset auto mode once driver input is received
     state.isAuto.and(hasDriverInput).onTrue(state.resetAuto());
@@ -471,21 +473,18 @@ public class RobotContainer {
     return state.isPoseTrusted.getAsBoolean() ? LedVision.Type.kTrusted : LedVision.Type.kUnknown;
   }
 
-  /** Commands drive forward fixed distance. */
+  /** Command to drive forward fixed distance. */
   private Command driveForward(Distance distance) {
     return new InstantCommand(
             () -> {
-              final var pose = drivetrain.getPose();
-              final var state = RobotState.getInstance();
+              final var pose = state.getRobotPose();
+              final var vector =
+                  new Translation2d(distance.in(Meters), 0).rotateBy(pose.getRotation());
+
               state.setTargetPose(
-                  new Pose2d(
-                      pose.getTranslation()
-                          .plus(
-                              new Translation2d(distance.in(Meters), 0)
-                                  .rotateBy(pose.getRotation())),
-                      pose.getRotation()));
+                  new Pose2d(pose.getTranslation().plus(vector), pose.getRotation()));
             })
-        .andThen(new DriveToPose(drivetrain, state::getTargetPose));
+        .andThen(new DriveToPose(drivetrain, state::getTargetPose, state::getRobotPose));
   }
 
   /** Command sequence to eject algae and reset intent and presence. */

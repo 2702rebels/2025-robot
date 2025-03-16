@@ -23,7 +23,8 @@ public class DriveToPose extends Command {
   private final double minDistance = 0.2;
   private final double maxDistance = 0.8;
 
-  protected Supplier<Optional<Pose2d>> poseSupplier;
+  private final Supplier<Optional<Pose2d>> targetPoseSupplier;
+  private final Supplier<Pose2d> currentPoseSupplier;
   private final BooleanSupplier stopCondition;
   private final CommandSwerveDrivetrain drive;
   private boolean running;
@@ -52,20 +53,26 @@ public class DriveToPose extends Command {
   private double distanceErrorAbs;
   private double rotationErrorAbs;
 
-  public DriveToPose(CommandSwerveDrivetrain drive, Pose2d pose) {
-    this(drive, () -> Optional.of(pose), null);
-  }
-
-  public DriveToPose(CommandSwerveDrivetrain drive, Supplier<Optional<Pose2d>> poseSupplier) {
-    this(drive, poseSupplier, null);
+  public DriveToPose(
+      CommandSwerveDrivetrain drive, Pose2d targetPose, Supplier<Pose2d> currentPoseSupplier) {
+    this(drive, () -> Optional.of(targetPose), currentPoseSupplier, null);
   }
 
   public DriveToPose(
       CommandSwerveDrivetrain drive,
-      Supplier<Optional<Pose2d>> poseSupplier,
+      Supplier<Optional<Pose2d>> targetPoseSupplier,
+      Supplier<Pose2d> currentPoseSupplier) {
+    this(drive, targetPoseSupplier, currentPoseSupplier, null);
+  }
+
+  public DriveToPose(
+      CommandSwerveDrivetrain drive,
+      Supplier<Optional<Pose2d>> targetPoseSupplier,
+      Supplier<Pose2d> currentPoseSupplier,
       BooleanSupplier stopCondition) {
     this.drive = drive;
-    this.poseSupplier = poseSupplier;
+    this.targetPoseSupplier = targetPoseSupplier;
+    this.currentPoseSupplier = currentPoseSupplier;
     this.stopCondition = stopCondition;
     addRequirements(drive);
 
@@ -76,13 +83,13 @@ public class DriveToPose extends Command {
 
   @Override
   public void initialize() {
-    final var pose = poseSupplier.get();
+    final var pose = targetPoseSupplier.get();
     if (!pose.isPresent()) {
       return;
     }
 
     final var currentFieldVelocity = drive.getFieldSpeeds();
-    final var currentPose = drive.getPose();
+    final var currentPose = currentPoseSupplier.get();
     final var desiredPose = pose.get();
 
     final var currentTranslation = currentPose.getTranslation();
@@ -102,21 +109,21 @@ public class DriveToPose extends Command {
                 .getX()));
 
     rotationController.reset(
-        currentPose.getRotation().getRadians(), drive.getRobotSpeeds().omegaRadiansPerSecond);
+        currentPose.getRotation().getRadians(), currentFieldVelocity.omegaRadiansPerSecond);
 
     setpointTranslation = currentTranslation;
   }
 
   @Override
   public void execute() {
-    final var pose = poseSupplier.get();
+    final var pose = targetPoseSupplier.get();
     if (!pose.isPresent()) {
       return;
     }
 
     running = true;
 
-    final var currentPose = drive.getPose();
+    final var currentPose = currentPoseSupplier.get();
     final var desiredPose = pose.get();
 
     final var currentTranslation = currentPose.getTranslation();
@@ -171,17 +178,19 @@ public class DriveToPose extends Command {
     final var setpointPose =
         new Pose2d(setpointTranslation, new Rotation2d(distanceController.getSetpoint().position));
 
-    DogLog.log("DriveToPose/Setpoint", setpointPose);
-    DogLog.log("DriveToPose/Goal", desiredPose);
-    DogLog.log("DriveToPose/DistanceMeasured", distance);
-    DogLog.log("DriveToPose/DistanceSetpoint", distanceController.getSetpoint().position);
-    DogLog.log("DriveToPose/DistanceVelocity", distanceController.getSetpoint().velocity);
-    DogLog.log("DriveToPose/RotationMeasured", Units.radiansToDegrees(currentRotation));
-    DogLog.log("DriveToPose/RotationSetpoint", rotationController.getSetpoint().position);
-    DogLog.log("DriveToPose/RotationVelocity", rotationController.getSetpoint().velocity);
-    DogLog.log("DriveToPose/RotationError", Units.radiansToDegrees(rotationErrorAbs));
-    DogLog.log("DriveToPose/DistanceAtGoal", distanceController.atGoal());
-    DogLog.log("DriveToPose/RotationAtGoal", rotationController.atGoal());
+    if (Constants.Settings.loggingEnabled) {
+      DogLog.log("DriveToPose/Setpoint", setpointPose);
+      DogLog.log("DriveToPose/Goal", desiredPose);
+      DogLog.log("DriveToPose/DistanceMeasured", distance);
+      DogLog.log("DriveToPose/DistanceSetpoint", distanceController.getSetpoint().position);
+      DogLog.log("DriveToPose/DistanceVelocity", distanceController.getSetpoint().velocity);
+      DogLog.log("DriveToPose/RotationMeasured", Units.radiansToDegrees(currentRotation));
+      DogLog.log("DriveToPose/RotationSetpoint", rotationController.getSetpoint().position);
+      DogLog.log("DriveToPose/RotationVelocity", rotationController.getSetpoint().velocity);
+      DogLog.log("DriveToPose/RotationError", Units.radiansToDegrees(rotationErrorAbs));
+      DogLog.log("DriveToPose/DistanceAtGoal", distanceController.atGoal());
+      DogLog.log("DriveToPose/RotationAtGoal", rotationController.atGoal());
+    }
   }
 
   @Override
@@ -192,7 +201,7 @@ public class DriveToPose extends Command {
 
   @Override
   public boolean isFinished() {
-    return !poseSupplier.get().isPresent()
+    return !targetPoseSupplier.get().isPresent()
         || atGoal()
         || (stopCondition != null && stopCondition.getAsBoolean());
   }

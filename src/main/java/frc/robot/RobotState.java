@@ -49,13 +49,15 @@ public class RobotState {
   private static final int kCoralsPerLevel = 12;
 
   private static final long kVisionCutoff = 60 * 1000; // microseconds
+  private static final long kVisionRecent = 30 * 1000; // microseconds
 
   private static final double kStationarySpeedTolerance = 0.05; // 5 cm/sec
   private static final double kStationaryOmegaTolerance = Units.degreesToRadians(5); // 5 deg/sec
   private static final double kSlowSpeedTolerance = 1; // 1.0 m/sec
   private static final double kSlowOmegaTolerance = Units.degreesToRadians(60); // 60 deg/sec
   private static final double kRobotSlipThreshold = 0.3;
-  private static final double kOdometryTrustThreshold = 0.5;
+  private static final double kOdometryTrustThreshold = 0.8;
+  private static final double kOdometryTrustPenalty = 0.05;
 
   private final NetworkTableInstance nt = NetworkTableInstance.getDefault();
 
@@ -512,6 +514,12 @@ public class RobotState {
     odometryTrust = 1;
     odometryPose = pose;
     odometryPoseReset.accept(pose);
+    robotPose = pose;
+  }
+
+  /** Sets robot pose to a known pose and restores trust. */
+  public void setRobotPose(Pose2d pose) {
+    resetOdometryPose(pose);
   }
 
   /**
@@ -521,10 +529,10 @@ public class RobotState {
    * runs.
    */
   public void enterPeriodic() {
+    pollReefState();
+
     // synchronize all states to a common timestamp representing this update cycle
     final var timestamp = RobotController.getFPGATime();
-
-    pollReefState();
 
     boolean isRobotStationary = false;
     boolean isRobotSlow = false;
@@ -544,7 +552,7 @@ public class RobotState {
       // reduce trust in odometry if slippage is detected
       final var maxSlipRatio = Arrays.stream(moduleSlipRatios).map(Math::abs).max().getAsDouble();
       if (maxSlipRatio > kRobotSlipThreshold) {
-        odometryTrust = Math.max(0, odometryTrust - 0.05);
+        odometryTrust = Math.max(0, odometryTrust - kOdometryTrustPenalty);
       }
 
       isRobotStationary =
@@ -582,9 +590,12 @@ public class RobotState {
       // reset robot pose to vision pose when moving slowly and odometry is not trusted
       if (isRobotSlow && odometryTrust < kOdometryTrustThreshold) {
         resetOdometryPose(visionPose);
-        robotPose = visionPose;
       } else {
-        robotPose = visionPose.interpolate(odometryPose, odometryTrust);
+        // interpolate only if the vision timestamp is really fresh
+        robotPose =
+            visionPoseTimestamp > timestamp - kVisionRecent
+                ? visionPose.interpolate(odometryPose, odometryTrust)
+                : odometryPose;
       }
     } else {
       robotPose = odometryPose;
