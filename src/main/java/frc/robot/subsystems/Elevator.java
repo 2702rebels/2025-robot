@@ -65,7 +65,7 @@ public class Elevator extends SubsystemBase {
   private final LoggedTalonFXS motorFollower;
 
   private final Follower followerControl;
-  private final MotionMagicExpoVoltage request = new MotionMagicExpoVoltage(0).withEnableFOC(false);
+  private final MotionMagicExpoVoltage request = new MotionMagicExpoVoltage(0).withEnableFOC(true);
 
   public Elevator(int leaderCanID, int followerCanID, CANBus canbus) {
     motorLeader =
