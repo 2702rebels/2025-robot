@@ -1,5 +1,6 @@
 package frc.robot.lib;
 
+import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
@@ -7,12 +8,16 @@ import edu.wpi.first.epilogue.Logged.Importance;
 import java.util.function.Consumer;
 
 public class LoggedSparkMax extends SparkMax {
+  private final RelativeEncoder encoder;
+
   public LoggedSparkMax(int deviceId) {
     this(deviceId, null);
   }
 
   public LoggedSparkMax(int deviceId, Consumer<SparkMaxConfig> configurator) {
     super(deviceId, MotorType.kBrushless);
+
+    encoder = getEncoder();
 
     final var config = new SparkMaxConfig();
     configure(config);
@@ -40,6 +45,11 @@ public class LoggedSparkMax extends SparkMax {
     return getAppliedOutput() * getBusVoltage();
   }
 
+  @Logged(name = "AppliedOutput", importance = Importance.INFO)
+  public double getDutyCycle() {
+    return getAppliedOutput();
+  }
+
   @Logged(name = "CurrentAmps", importance = Importance.INFO)
   public double getCurrentAmps() {
     return getOutputCurrent();
@@ -47,6 +57,6 @@ public class LoggedSparkMax extends SparkMax {
 
   @Logged(name = "VelocityRPM", importance = Importance.INFO)
   public double getVelocityRPM() {
-    return getEncoder().getVelocity();
+    return encoder.getVelocity();
   }
 }

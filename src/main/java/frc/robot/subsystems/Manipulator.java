@@ -4,7 +4,9 @@ import com.revrobotics.spark.SparkLimitSwitch;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.FunctionalCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.lib.LoggedSparkMax;
 import frc.robot.lib.Tunable;
@@ -15,9 +17,12 @@ import frc.robot.lib.Tunable;
  */
 public final class Manipulator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
-  private static final double __kCoralIntakeVelocity = 0.75;
+  private static final double __kCoralIntakeVelocity = 0.85;
   private static final double __kCoralIntakeVelocityGuide = 0.75;
   private static final double __kCoralEjectVelocity = 0.4;
+  private static final double __kCoralReverseTime = 0.08;
+  private static final double __kCoralStallSpeedUB = 800; // RPMs;
+  private static final double __kCoralStallSpeedLB = 400; // RPMs;
 
   private static final double __kAlgaeIntakeVelocity = 0.5;
   private static final double __kAlgaeEjectVelocity = 0.5;
@@ -25,6 +30,27 @@ public final class Manipulator extends SubsystemBase {
 
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;
+
+  private double motorGuideSpeed = 0;
+
+  private boolean intakingCoral = false;
+  private boolean reversedGuide = false;
+  private boolean stallDetectionActive = false;
+
+  private long reversedAt = -1;
+
+  @Logged(name = "Stalled", importance = Importance.DEBUG)
+  public boolean isCoralMotorStalled() {
+    // only detect stalling when intaking coral and
+    // once we have reached target RPMs on the intake
+    if (intakingCoral && stallDetectionActive) {
+      final var rpm = Math.abs(motorCoral.getVelocityRPM());
+      return Math.abs(motorCoral.getAppliedOutput()) > kCoralIntakeVelocity.get() - 0.05
+          && rpm > kCoralStallSpeedLB.get()
+          && rpm < kCoralStallSpeedUB.get();
+    }
+    return false;
+  }
 
   @Logged(name = "Guide", importance = Importance.INFO)
   private final LoggedSparkMax motorGuide;
@@ -71,8 +97,39 @@ public final class Manipulator extends SubsystemBase {
   }
 
   private void stopMotors() {
+    intakingCoral = false;
+    reversedGuide = false;
+    stallDetectionActive = false;
+    reversedAt = -1;
+    motorGuideSpeed = 0;
+
     motorCoral.stopMotor();
     motorGuide.stopMotor();
+  }
+
+  @Override
+  public void periodic() {
+    if (intakingCoral) {
+      final var timestamp = RobotController.getFPGATime();
+
+      // stall detection only needs to kick in if we have seen coral motor
+      // at speeds above the stall upper bound
+      if (!stallDetectionActive
+          && Math.abs(motorCoral.getVelocityRPM()) > kCoralStallSpeedUB.get()) {
+        stallDetectionActive = true;
+      }
+
+      // if coral motor is stalling, reverse guide for a brief time
+      if (isCoralMotorStalled() && reversedGuide == false) {
+        reversedAt = timestamp;
+        reversedGuide = true;
+      } else if (reversedAt < 0 || timestamp >= reversedAt + kCoralReverseTime.get() * 1000000) {
+        reversedAt = -1;
+        reversedGuide = false;
+      }
+
+      motorGuide.set((reversedGuide ? -1 : 1) * motorGuideSpeed);
+    }
   }
 
   /**
@@ -85,19 +142,25 @@ public final class Manipulator extends SubsystemBase {
   }
 
   public Command intakeCoral() {
-    return runEnd(
+    return new FunctionalCommand(
             () -> {
-              motorCoral.set(-coralIntakeVelocity.get());
-              motorGuide.set(-coralIntakeVelocityGuide.get());
+              intakingCoral = true;
+              stallDetectionActive = false;
+              motorGuideSpeed = -kCoralIntakeVelocityGuide.get();
             },
-            this::stopMotors)
+            () -> {
+              motorCoral.set(-kCoralIntakeVelocity.get());
+            },
+            interrupted -> stopMotors(),
+            () -> false,
+            this)
         .withName("IntakeCoral");
   }
 
   public Command ejectCoral() {
     return runEnd(
             () -> {
-              motorCoral.set(coralEjectVelocity.get());
+              motorCoral.set(kCoralEjectVelocity.get());
               motorGuide.stopMotor();
             },
             this::stopMotors)
@@ -108,7 +171,7 @@ public final class Manipulator extends SubsystemBase {
     return runEnd(
             () -> {
               motorCoral.stopMotor();
-              motorGuide.set(algaeIntakeVelocity.get());
+              motorGuide.set(kAlgaeIntakeVelocity.get());
             },
             this::stopMotors)
         .withName("IntakeAlgae");
@@ -118,7 +181,7 @@ public final class Manipulator extends SubsystemBase {
     return runEnd(
             () -> {
               motorCoral.stopMotor();
-              motorGuide.set(-algaeEjectVelocity.get());
+              motorGuide.set(-kAlgaeEjectVelocity.get());
             },
             this::stopMotors)
         .withName("EjectAlgae");
@@ -128,7 +191,7 @@ public final class Manipulator extends SubsystemBase {
     return runEnd(
             () -> {
               motorCoral.stopMotor();
-              motorGuide.set(algaeHoldVelocity.get());
+              motorGuide.set(kAlgaeHoldVelocity.get());
             },
             this::stopMotors)
         .withName("HoldAlgae");
@@ -139,12 +202,15 @@ public final class Manipulator extends SubsystemBase {
   }
 
   // spotless:off
-  private static Tunable.DoubleValue coralIntakeVelocity = Tunable.value("Manipulator/Coral/IntakeVelocity", __kCoralIntakeVelocity);
-  private static Tunable.DoubleValue coralIntakeVelocityGuide = Tunable.value("Manipulator/Coral/IntakeVelocityGuide", __kCoralIntakeVelocityGuide);
-  private static Tunable.DoubleValue coralEjectVelocity = Tunable.value("Manipulator/Coral/EjectVelocity", __kCoralEjectVelocity);
+  private static Tunable.DoubleValue kCoralIntakeVelocity = Tunable.value("Manipulator/Coral/IntakeVelocity", __kCoralIntakeVelocity);
+  private static Tunable.DoubleValue kCoralIntakeVelocityGuide = Tunable.value("Manipulator/Coral/IntakeVelocityGuide", __kCoralIntakeVelocityGuide);
+  private static Tunable.DoubleValue kCoralEjectVelocity = Tunable.value("Manipulator/Coral/EjectVelocity", __kCoralEjectVelocity);
+  private static Tunable.DoubleValue kCoralStallSpeedUB = Tunable.value("Manipulator/Coral/StallSpeedUB", __kCoralStallSpeedUB);
+  private static Tunable.DoubleValue kCoralStallSpeedLB = Tunable.value("Manipulator/Coral/StallSpeedLB", __kCoralStallSpeedLB);
+  private static Tunable.DoubleValue kCoralReverseTime = Tunable.value("Manipulator/Coral/ReverseTime", __kCoralReverseTime);
 
-  private static Tunable.DoubleValue algaeIntakeVelocity = Tunable.value("Manipulator/Algae/IntakeVelocity", __kAlgaeIntakeVelocity);
-  private static Tunable.DoubleValue algaeEjectVelocity = Tunable.value("Manipulator/Algae/EjectVelocity", __kAlgaeEjectVelocity);
-  private static Tunable.DoubleValue algaeHoldVelocity = Tunable.value("Manipulator/Algae/HoldVelocity", __kAlgaeHoldVelocity);
+  private static Tunable.DoubleValue kAlgaeIntakeVelocity = Tunable.value("Manipulator/Algae/IntakeVelocity", __kAlgaeIntakeVelocity);
+  private static Tunable.DoubleValue kAlgaeEjectVelocity = Tunable.value("Manipulator/Algae/EjectVelocity", __kAlgaeEjectVelocity);
+  private static Tunable.DoubleValue kAlgaeHoldVelocity = Tunable.value("Manipulator/Algae/HoldVelocity", __kAlgaeHoldVelocity);
   // spotless:on
 }
