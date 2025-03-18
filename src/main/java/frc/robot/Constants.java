@@ -9,6 +9,7 @@ import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearAcceleration;
 import edu.wpi.first.units.measure.LinearVelocity;
+import edu.wpi.first.wpilibj.DriverStation;
 import frc.robot.generated.TunerConstants;
 
 public final class Constants {
@@ -169,7 +170,15 @@ public final class Constants {
     }
 
     /** PP robot configuration */
-    public static final RobotConfig robotConfig = null;
+    public static RobotConfig robotConfig = null;
+
+    static {
+      try {
+        robotConfig = RobotConfig.fromGUISettings();
+      } catch (Exception e) {
+        DriverStation.reportError("PPConfigLoader: " + e.getMessage(), e.getStackTrace());
+      }
+    }
   }
 
   public static final class LedConstants {
