@@ -342,28 +342,27 @@ public class RobotState {
   public Command setIntent(Intent intent) {
     return Commands.runOnce(
             () -> {
-              final var scoringLevel = getScoringLevel();
-              if (scoringLevel <= 0) {
-                return;
-              }
-
-              // if vision assist is enabled and we trust current pose
-              // then try to acquire scoring pose based on the closest
-              // un-scored position, switch to auto mode if successful
-              if (intent == Intent.kCoralScoreAuto
-                  && visionAssist.get()
-                  && isPoseTrusted.getAsBoolean()) {
-                final var scoringPoseAndTarget =
-                    getClosestScoringPose(getRobotPose(), scoringLevel);
-
-                if (scoringPoseAndTarget.isPresent()) {
-                  auto = true;
-                  scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
-                  scoringTarget = scoringPoseAndTarget.get().getSecond();
-                }
-              }
-
               if (intent == Intent.kCoralScoreAuto) {
+                // must have scoring level selected
+                final var scoringLevel = getScoringLevel();
+                if (scoringLevel <= 0) {
+                  return;
+                }
+
+                // if vision assist is enabled and we trust current pose
+                // then try to acquire scoring pose based on the closest
+                // un-scored position, switch to auto mode if successful
+                if (visionAssist.get() && isPoseTrusted.getAsBoolean()) {
+                  final var scoringPoseAndTarget =
+                      getClosestScoringPose(getRobotPose(), scoringLevel);
+
+                  if (scoringPoseAndTarget.isPresent()) {
+                    auto = true;
+                    scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
+                    scoringTarget = scoringPoseAndTarget.get().getSecond();
+                  }
+                }
+
                 switch (scoringLevel) {
                   case 1:
                     this.intent = Intent.kCoralScoreL1;

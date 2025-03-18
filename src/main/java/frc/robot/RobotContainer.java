@@ -101,7 +101,7 @@ public class RobotContainer {
   private final AutoChooser autoChooser = new AutoChooser();
 
   // slows down max rotation speed for more precise movements
-  private final Trigger precisionRotation = controllerDriver.leftStick();
+  private final Trigger preciseRotationActive = controllerDriver.leftStick();
 
   // button mappings
   private final Trigger resetOrientationButton = controllerDriver.start();
@@ -451,14 +451,14 @@ public class RobotContainer {
             () ->
                 DriverStation.isTeleopEnabled()
                     && DriverStation.getMatchTime() > 0
-                    && DriverStation.getMatchTime() <= Math.round(endgameAlert1.get()))
+                    && DriverStation.getMatchTime() <= Math.round(kEndgameAlert1.get()))
         .onTrue(rumble(Milliseconds.of(500)));
 
     new Trigger(
             () ->
                 DriverStation.isTeleopEnabled()
                     && DriverStation.getMatchTime() > 0
-                    && DriverStation.getMatchTime() <= Math.round(endgameAlert2.get()))
+                    && DriverStation.getMatchTime() <= Math.round(kEndgameAlert2.get()))
         .onTrue(
             Commands.sequence(
                 rumble(Milliseconds.of(200)),
@@ -536,7 +536,7 @@ public class RobotContainer {
                     .maintainPosition(Position.L4_SCORED)
                     .until(superstructure::isDoneScoringL4),
                 state.markScoringTarget(),
-                driveForward(Inches.of(-10)).withTimeout(1),
+                driveForward(Inches.of(-10)).withTimeout(1).until(hasDriverInput),
                 state.setIntent(Intent.kNone)));
   }
 
@@ -567,13 +567,14 @@ public class RobotContainer {
         Commands.runOnce(() -> controllerDriver.getHID().setRumble(RumbleType.kBothRumble, 0.0)));
   }
 
+  /** Gets modifier of the rotational velocity when precise rotation mode is active. */
   private double getOmegaModifier() {
-    return precisionRotation.getAsBoolean() ? preciseRotation.get() : 1;
+    return preciseRotationActive.getAsBoolean() ? kPreciseRotation.get() : 1;
   }
 
   // spotless:off
-  private static final Tunable.DoubleValue endgameAlert1 = Tunable.value("Endgame/Alert1", 30.0);
-  private static final Tunable.DoubleValue endgameAlert2 = Tunable.value("Endgame/Alert2", 10.0);
-  private static final Tunable.DoubleValue preciseRotation = Tunable.value("Control/PreciseRotation", 0.2);
+  private static final Tunable.DoubleValue kEndgameAlert1 = Tunable.value("Endgame/Alert1", 30.0);
+  private static final Tunable.DoubleValue kEndgameAlert2 = Tunable.value("Endgame/Alert2", 10.0);
+  private static final Tunable.DoubleValue kPreciseRotation = Tunable.value("Control/PreciseRotation", 0.2);
   // spotless:on
 }
