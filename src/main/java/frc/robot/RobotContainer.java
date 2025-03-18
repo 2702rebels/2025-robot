@@ -407,7 +407,12 @@ public class RobotContainer {
         .or(state.shouldScoreCoralL2)
         .or(state.shouldScoreCoralL3)
         .and(superstructure.hasCoral.negate())
-        .onTrue(state.setIntent(Intent.kNone));
+        .onTrue(
+            // backup a little bit to avoid hitting corals on the way down
+            driveForward(Inches.of(-1))
+                .withTimeout(0.5)
+                .until(hasDriverInput)
+                .andThen(state.setIntent(Intent.kNone)));
 
     // hover
     state.shouldHover.onTrue(superstructure.setPosition(Position.HOVER));
@@ -525,7 +530,7 @@ public class RobotContainer {
         .resetScoringPose()
         .andThen(
             Commands.sequence(
-                driveForward(Inches.of(12)).withTimeout(1),
+                driveForward(Inches.of(13)).withTimeout(1),
                 state.setIntent(Intent.kCoralScoreL4Final),
                 superstructure
                     .maintainPosition(Position.L4_SCORED)
