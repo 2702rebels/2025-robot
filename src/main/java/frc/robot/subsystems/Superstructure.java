@@ -54,12 +54,13 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kNetAngle = 45;
   private static final double __kClimbAngle = 80;
 
-  private static final double __kBranchOffset = 8;
+  private static final double __kBranchOffset = 32;
 
   private static final double kSafeEjectAngle = 50;
   private static final double kAngleTolerance = 5;
   private static final double kElevatorToleranceGround = 2;
   private static final double kElevatorToleranceNet = 2;
+  private static final double kBranchDownwardDelta = 2;
 
   @Logged(name = "Position", importance = Importance.INFO)
   private Position position = Position.STOWED;
@@ -70,7 +71,11 @@ public final class Superstructure extends SubsystemBase {
 
   // delay on the coral presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kCoralIntakeDelaySeconds = 0.5;
+  private static final double kCoralIntakeDelaySeconds = 0.4;
+
+  // profile captured when the position change was commenced
+  private Optional<Double> heightAtLastPosition = Optional.empty();
+  private Optional<Double> angleAtLastPosition = Optional.empty();
 
   private final Elevator elevator;
   private final Pivot pivot;
@@ -218,6 +223,8 @@ public final class Superstructure extends SubsystemBase {
     return runOnce(
             () -> {
               this.position = position;
+              this.heightAtLastPosition = Optional.of(elevator.getPosition());
+              this.angleAtLastPosition = Optional.of(pivot.getAngle());
             })
         .withName("SetPosition");
   }
@@ -226,6 +233,8 @@ public final class Superstructure extends SubsystemBase {
     return runOnce(
             () -> {
               this.position = position.get();
+              this.heightAtLastPosition = Optional.of(elevator.getPosition());
+              this.angleAtLastPosition = Optional.of(pivot.getAngle());
             })
         .withName("SetPosition");
   }
@@ -233,6 +242,8 @@ public final class Superstructure extends SubsystemBase {
   public Command maintainPosition(Position position) {
     return run(() -> {
           this.position = position;
+          this.heightAtLastPosition = Optional.empty();
+          this.angleAtLastPosition = Optional.empty();
         })
         .withName("MaintainPosition");
   }
@@ -339,10 +350,22 @@ public final class Superstructure extends SubsystemBase {
     final var pivotProtected =
         height > kElevatorToleranceGround && height < kNetHeight.get() - kElevatorToleranceNet;
 
-    final var actualAngle =
+    var actualAngle =
         MathUtil.isNear(targetHeight, height, kBranchOffset.get())
             ? pivotProtected ? Math.min(targetAngle, transitionAngle) : targetAngle
             : transitionAngle;
+
+    // on downward motion do not stow the pivot right away since it tends to hit
+    // the coral above it as it retracts, instead wait until elevator lowers somewhat
+    if (targetHeight < height
+        && heightAtLastPosition.isPresent()
+        && angleAtLastPosition.isPresent()) {
+      final var _heightAtLastPosition = heightAtLastPosition.get();
+      if (_heightAtLastPosition > kL1Height.get()
+          && height > _heightAtLastPosition - kBranchDownwardDelta) {
+        actualAngle = angleAtLastPosition.get();
+      }
+    }
 
     return Pair.of(targetHeight, actualAngle);
   }
