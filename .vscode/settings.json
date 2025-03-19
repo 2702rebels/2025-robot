@@ -73,17 +73,23 @@
   "cSpell.words": [
     "apriltag",
     "brushless",
+    "canbus",
+    "Canivore",
     "choreo",
+    "CTRE",
     "datagram",
     "deadband",
     "Decelaration",
     "Feedforward",
     "feedforwards",
+    "Holonomic",
     "intaking",
     "odometry",
     "quasistatic",
     "roborio",
     "setpoint",
-    "teleop"
+    "teleop",
+    "timebase",
+    "traj"
   ]
 }

@@ -9,6 +9,7 @@ import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearAcceleration;
 import edu.wpi.first.units.measure.LinearVelocity;
+import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.DriverStation;
 import frc.robot.generated.TunerConstants;
 
@@ -97,20 +98,23 @@ public final class Constants {
     /** Maximum linear speed */
     public static final LinearVelocity maxSpeed = TunerConstants.kSpeedAt12Volts;
 
+    /** Maximum acceleration time */
+    public static final Time maxAccelerationTime = Seconds.of(0.5);
+
     /** Maximum linear acceleration */
-    public static final LinearAcceleration maxAcceleration = maxSpeed.div(Seconds.of(0.5));
+    public static final LinearAcceleration maxAcceleration = maxSpeed.div(maxAccelerationTime);
 
     /** Maximum angular velocity */
     public static final AngularVelocity maxAngularRate = RotationsPerSecond.of(1);
 
     /** Maximum angular acceleration */
     public static final AngularAcceleration maxAngularAcceleration =
-        maxAngularRate.div(Seconds.of(0.5));
+        maxAngularRate.div(maxAccelerationTime);
 
     /** PID configuration to pose chasing controllers */
     public static final class PoseChasing {
       /** kP used for the translation PID drive controllers */
-      public static final double translationKp = 2;
+      public static final double translationKp = 2.5;
 
       /** kI used for the translation PID drive controllers */
       public static final double translationKi = 0;
@@ -119,7 +123,7 @@ public final class Constants {
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 2;
+      public static final double rotationKp = 2.5;
 
       /** kI used for the rotation PID drive controllers */
       public static final double rotationKi = 0;
@@ -146,7 +150,7 @@ public final class Constants {
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 0.4;
+      public static final double rotationKp = 1;
 
       /** kI used for the rotation PID drive controllers */
       public static final double rotationKi = 0;

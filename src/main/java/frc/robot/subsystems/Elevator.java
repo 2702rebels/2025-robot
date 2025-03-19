@@ -44,6 +44,7 @@ public class Elevator extends SubsystemBase {
   private static final double __kAExpo = 0.04;
 
   private static final double kStatorCurrentLimit = 60;
+  private static final double kStallSpeed = 100; // RPMs
 
   // conversion factor between rotation and linear movement
   // 3" wheel diameter, 8:1 reduction ratio
@@ -118,6 +119,11 @@ public class Elevator extends SubsystemBase {
     Tunable.bindMotionProfile("Elevator/Motion", motorLeader);
 
     reset();
+  }
+
+  public boolean isStalled() {
+    return motorLeader.getStatorCurrentAmps() > kStatorCurrentLimit * 0.9
+        && Math.abs(motorLeader.getVelocityRPM()) < kStallSpeed;
   }
 
   @Override

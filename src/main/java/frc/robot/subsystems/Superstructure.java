@@ -31,10 +31,11 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kL3Height = 51.5;
   private static final double __kL4Height = 64;
   private static final double __kL4SHeight = 46;
+  private static final double __kL4RHeight = 62;
   private static final double __kL2AlgaeHeight = 20;
   private static final double __kL3AlgaeHeight = 36;
   private static final double __kNetHeight = 66;
-  private static final double __kHoverHeight = 10;
+  private static final double __kHoverHeight = 12;
 
   // angles are in degrees [!]
   private static final double __kStowedAngle = 130;
@@ -57,13 +58,13 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kBranchOffset = 32;
 
   private static final double kSafeEjectAngle = 50;
-  private static final double kAngleTolerance = 5;
+  private static final double kAngleTolerance = 10; // for elevator protection
   private static final double kElevatorToleranceGround = 2;
   private static final double kElevatorToleranceNet = 2;
   private static final double kBranchDownwardDelta = 2;
 
   @Logged(name = "Position", importance = Importance.INFO)
-  private Position position = Position.STOWED;
+  private Position position = Position.kStowed;
 
   // delay on the coral presence trigger to allow it fully
   // leave the mechanism before shutting down motors, etc.
@@ -71,7 +72,10 @@ public final class Superstructure extends SubsystemBase {
 
   // delay on the coral presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kCoralIntakeDelaySeconds = 0.4;
+  private static final double kCoralIntakeDelaySeconds = 0.6;
+
+  // delay on the elevator stall detection (rising edge)
+  private static final double kElevatorStallDelaySeconds = 0.1;
 
   // profile captured when the position change was commenced
   private Optional<Double> heightAtLastPosition = Optional.empty();
@@ -132,10 +136,10 @@ public final class Superstructure extends SubsystemBase {
         new Trigger(
             () -> {
               switch (position) {
-                case L2_ALGAE:
+                case kL2Algae:
                   return elevator.isAtPosition(kL2AlgaeHeight.get())
                       && pivot.isAtAngle(kL2AlgaeAngle.get());
-                case L3_ALGAE:
+                case kL3Algae:
                   return elevator.isAtPosition(kL3AlgaeHeight.get())
                       && pivot.isAtAngle(kL3AlgaeAngle.get());
                 default:
@@ -146,25 +150,27 @@ public final class Superstructure extends SubsystemBase {
     // spotless:off
     hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasCoralDelaySeconds, DebounceType.kFalling).debounce(kCoralIntakeDelaySeconds, DebounceType.kRising);
     hasAlgae = new Trigger(() -> hasAlgaeState);
+    isElevatorStalled = new Trigger(elevator::isStalled).debounce(kElevatorStallDelaySeconds, DebounceType.kRising);
     // spotless:on
   }
 
   /** Mechanism positions */
-  public enum Position {
-    STOWED,
-    FLOOR,
-    STATION,
-    L1,
-    L2,
-    L3,
-    L4,
-    L4_SCORED,
-    L2_ALGAE,
-    L3_ALGAE,
-    EJECT_ALGAE,
-    NET,
-    HOVER, // special position to allow trapped game pieces to escape
-    CLIMB, // special position for climbing
+  public static enum Position {
+    kStowed,
+    kFloor,
+    kStation,
+    kL1,
+    kL2,
+    kL3,
+    kL4,
+    kL4Retry,
+    kL4Scored,
+    kL2Algae,
+    kL3Algae,
+    kEjectAlgae,
+    kNet,
+    kHover, // special position to allow trapped game pieces to escape
+    kClimb, // special position for climbing
   }
 
   /** Trigger for coral presence. */
@@ -218,6 +224,10 @@ public final class Superstructure extends SubsystemBase {
   /** Trigger for superstructure ready to intake algae (from the reef). */
   @Logged(name = "CanAlgaeIntake", importance = Importance.INFO)
   public final Trigger canIntakeAlgae;
+
+  /** Trigger for stalled elevator. */
+  @Logged(name = "IsElevatorStalled", importance = Importance.INFO)
+  public final Trigger isElevatorStalled;
 
   public Command setPosition(Position position) {
     return runOnce(
@@ -332,13 +342,13 @@ public final class Superstructure extends SubsystemBase {
 
     // override stowed angle if we think we have an algae
     final var targetAngle =
-        position == Position.STOWED && hasAlgaeState
+        position == Position.kStowed && hasAlgaeState
             ? kStowedAlgaeAngle.get()
             : profile.getSecond();
 
-    // we should only transition to "L4 scored" from "L4", so no additional
-    // logic is needed, just command new height (and angle)
-    if (position == Position.L4_SCORED) {
+    // we should only transition between different "L4" levels by maintaining angle,
+    // no additional logic is needed, just command new height (and angle)
+    if (position == Position.kL4Scored || position == Position.kL4Retry) {
       return Pair.of(targetHeight, targetAngle);
     }
 
@@ -378,20 +388,21 @@ public final class Superstructure extends SubsystemBase {
     // caching prevents unnecessary allocations and improves lookup time
 
     // spotless:off
-    positionProfiles.put(Position.STOWED, Pair.of(kStowedHeight.get(), kStowedAngle.get()));
-    positionProfiles.put(Position.FLOOR, Pair.of(kFloorHeight.get(), kFloorAngle.get()));
-    positionProfiles.put(Position.STATION, Pair.of(kStationHeight.get(), kStationAngle.get()));
-    positionProfiles.put(Position.L1, Pair.of(kL1Height.get(), kL1Angle.get()));
-    positionProfiles.put(Position.L2, Pair.of(kL2Height.get(), kL2Angle.get()));
-    positionProfiles.put(Position.L3, Pair.of(kL3Height.get(), kL3Angle.get()));
-    positionProfiles.put(Position.L4, Pair.of(kL4Height.get(), kL4Angle.get()));
-    positionProfiles.put(Position.L4_SCORED, Pair.of(kL4SHeight.get(), kL4SAngle.get()));
-    positionProfiles.put(Position.L2_ALGAE, Pair.of(kL2AlgaeHeight.get(), kL2AlgaeAngle.get()));
-    positionProfiles.put(Position.L3_ALGAE, Pair.of(kL3AlgaeHeight.get(), kL3AlgaeAngle.get()));
-    positionProfiles.put(Position.NET, Pair.of(kNetHeight.get(), kNetAngle.get()));
-    positionProfiles.put(Position.EJECT_ALGAE, Pair.of(kFloorHeight.get(), kEjectAlgaeAngle.get()));
-    positionProfiles.put(Position.HOVER, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
-    positionProfiles.put(Position.CLIMB, Pair.of(kFloorHeight.get(), kClimbAngle.get()));
+    positionProfiles.put(Position.kStowed, Pair.of(kStowedHeight.get(), kStowedAngle.get()));
+    positionProfiles.put(Position.kFloor, Pair.of(kFloorHeight.get(), kFloorAngle.get()));
+    positionProfiles.put(Position.kStation, Pair.of(kStationHeight.get(), kStationAngle.get()));
+    positionProfiles.put(Position.kL1, Pair.of(kL1Height.get(), kL1Angle.get()));
+    positionProfiles.put(Position.kL2, Pair.of(kL2Height.get(), kL2Angle.get()));
+    positionProfiles.put(Position.kL3, Pair.of(kL3Height.get(), kL3Angle.get()));
+    positionProfiles.put(Position.kL4, Pair.of(kL4Height.get(), kL4Angle.get()));
+    positionProfiles.put(Position.kL4Scored, Pair.of(kL4SHeight.get(), kL4SAngle.get()));
+    positionProfiles.put(Position.kL4Retry, Pair.of(kL4RHeight.get(), kL4SAngle.get()));
+    positionProfiles.put(Position.kL2Algae, Pair.of(kL2AlgaeHeight.get(), kL2AlgaeAngle.get()));
+    positionProfiles.put(Position.kL3Algae, Pair.of(kL3AlgaeHeight.get(), kL3AlgaeAngle.get()));
+    positionProfiles.put(Position.kNet, Pair.of(kNetHeight.get(), kNetAngle.get()));
+    positionProfiles.put(Position.kEjectAlgae, Pair.of(kFloorHeight.get(), kEjectAlgaeAngle.get()));
+    positionProfiles.put(Position.kHover, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
+    positionProfiles.put(Position.kClimb, Pair.of(kFloorHeight.get(), kClimbAngle.get()));
     // spotless:on
   }
 
@@ -421,6 +432,7 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kL4Height = profileValue("L4/Height", __kL4Height);
   private static Tunable.DoubleValue kL4SAngle = profileValue("L4Scored/Angle", __kL4SAngle);
   private static Tunable.DoubleValue kL4SHeight = profileValue("L4Scored/Height", __kL4SHeight);
+  private static Tunable.DoubleValue kL4RHeight = profileValue("L4Retry/Height", __kL4RHeight);
   private static Tunable.DoubleValue kL2AlgaeAngle = profileValue("L2Algae/Angle", __kL2AlgaeAngle);
   private static Tunable.DoubleValue kL2AlgaeHeight = profileValue("L2Algae/Height", __kL2AlgaeHeight);
   private static Tunable.DoubleValue kL3AlgaeAngle = profileValue("L3Algae/Angle", __kL3AlgaeAngle);

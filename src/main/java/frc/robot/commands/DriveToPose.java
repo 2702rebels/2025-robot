@@ -179,17 +179,19 @@ public class DriveToPose extends Command {
         new Pose2d(setpointTranslation, new Rotation2d(distanceController.getSetpoint().position));
 
     if (Constants.Settings.rioLoggingEnabled) {
+      // spotless:off
       DogLog.log("DriveToPose/Setpoint", setpointPose);
       DogLog.log("DriveToPose/Goal", desiredPose);
       DogLog.log("DriveToPose/DistanceMeasured", distance);
       DogLog.log("DriveToPose/DistanceSetpoint", distanceController.getSetpoint().position);
       DogLog.log("DriveToPose/DistanceVelocity", distanceController.getSetpoint().velocity);
       DogLog.log("DriveToPose/RotationMeasured", Units.radiansToDegrees(currentRotation));
-      DogLog.log("DriveToPose/RotationSetpoint", rotationController.getSetpoint().position);
+      DogLog.log("DriveToPose/RotationSetpoint", Units.radiansToDegrees(rotationController.getSetpoint().position));
       DogLog.log("DriveToPose/RotationVelocity", rotationController.getSetpoint().velocity);
       DogLog.log("DriveToPose/RotationError", Units.radiansToDegrees(rotationErrorAbs));
       DogLog.log("DriveToPose/DistanceAtGoal", distanceController.atGoal());
       DogLog.log("DriveToPose/RotationAtGoal", rotationController.atGoal());
+      // spotless:on
     }
   }
 

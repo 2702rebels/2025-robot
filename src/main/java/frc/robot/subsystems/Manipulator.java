@@ -20,9 +20,9 @@ public final class Manipulator extends SubsystemBase {
   private static final double __kCoralIntakeVelocity = 0.85;
   private static final double __kCoralIntakeVelocityGuide = 0.75;
   private static final double __kCoralEjectVelocity = 0.4;
-  private static final double __kCoralReverseTime = 0.08;
-  private static final double __kCoralStallSpeedUB = 800; // RPMs;
-  private static final double __kCoralStallSpeedLB = 400; // RPMs;
+  private static final double __kCoralReverseTime = 0.06;
+  private static final double __kCoralStallSpeedUB = 800; // RPMs
+  private static final double __kCoralStallSpeedLB = 400; // RPMs
 
   private static final double __kAlgaeIntakeVelocity = 0.5;
   private static final double __kAlgaeEjectVelocity = 0.5;
@@ -123,12 +123,13 @@ public final class Manipulator extends SubsystemBase {
       if (isCoralMotorStalled() && reversedGuide == false) {
         reversedAt = timestamp;
         reversedGuide = true;
-      } else if (reversedAt < 0 || timestamp >= reversedAt + kCoralReverseTime.get() * 1000000) {
+      } else if (reversedAt < 0 || timestamp > reversedAt + kCoralReverseTime.get() * 1000000) {
         reversedAt = -1;
         reversedGuide = false;
       }
 
       motorGuide.set((reversedGuide ? -1 : 1) * motorGuideSpeed);
+      motorCoral.set(-kCoralIntakeVelocity.get());
     }
   }
 
@@ -148,9 +149,7 @@ public final class Manipulator extends SubsystemBase {
               stallDetectionActive = false;
               motorGuideSpeed = -kCoralIntakeVelocityGuide.get();
             },
-            () -> {
-              motorCoral.set(-kCoralIntakeVelocity.get());
-            },
+            () -> {},
             interrupted -> stopMotors(),
             () -> false,
             this)

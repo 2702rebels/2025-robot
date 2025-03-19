@@ -161,16 +161,20 @@ public class RobotContainer {
     state.setDetectedObjectSupplier(objectDetector::getDetectedObject);
 
     autoFactory = drivetrain.createAutoFactory();
-    autoRoutines = new AutoRoutines(autoFactory);
+    autoRoutines = new AutoRoutines(autoFactory, superstructure);
 
     autoChooser.addRoutine(
-        "DriveForward",
-        () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24)).withTimeout(5)));
+        "DriveForward", () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24))));
 
-    autoChooser.addRoutine("Score L2", autoRoutines::scoreL2);
-    autoChooser.addRoutine("Score L3", autoRoutines::scoreL3);
-    autoChooser.addRoutine("Score L4", autoRoutines::scoreL4);
-    autoChooser.addRoutine("SimplePath", autoRoutines::simplePathAuto);
+    autoChooser.addRoutine("Score L4 (J)", () -> autoRoutines.scoreL4x('J'));
+    autoChooser.addRoutine("Score L4 (I)", () -> autoRoutines.scoreL4x('I'));
+    autoChooser.addRoutine("Score L4 (H)", () -> autoRoutines.scoreL4x('H'));
+    autoChooser.addRoutine("Score L4 (G)", () -> autoRoutines.scoreL4x('G'));
+    autoChooser.addRoutine("Score L4 (F)", () -> autoRoutines.scoreL4x('F'));
+    autoChooser.addRoutine("Score L4 (E)", () -> autoRoutines.scoreL4x('E'));
+
+    // DO NOT USE: algae get stuck in the robot when trying to pick up pre-deployed coral
+    // autoChooser.addRoutine("Score L4 (I,L)", autoRoutines::scoreL4IL);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
@@ -256,7 +260,7 @@ public class RobotContainer {
 
     // eject coral (emergency mechanism does not check for coral presence)
     state.shouldEjectCoral.and(superstructure.canEject).whileTrue(manipulator.ejectCoral());
-    state.shouldEjectCoral.onTrue(superstructure.setPosition(Position.L1));
+    state.shouldEjectCoral.onTrue(superstructure.setPosition(Position.kL1));
 
     // intake algae
     state
@@ -268,12 +272,12 @@ public class RobotContainer {
     state
         .shouldIntakeAlgaeL2
         .and(superstructure.hasAlgae.negate())
-        .onTrue(superstructure.setPosition(Position.L2_ALGAE));
+        .onTrue(superstructure.setPosition(Position.kL2Algae));
 
     state
         .shouldIntakeAlgaeL3
         .and(superstructure.hasAlgae.negate())
-        .onTrue(superstructure.setPosition(Position.L3_ALGAE));
+        .onTrue(superstructure.setPosition(Position.kL3Algae));
 
     // hold algae while presence is set unless ejecting
     superstructure
@@ -286,7 +290,7 @@ public class RobotContainer {
     state
         .shouldEjectAlgae
         .and(superstructure.hasAlgae)
-        .onTrue(superstructure.setPosition(Position.EJECT_ALGAE));
+        .onTrue(superstructure.setPosition(Position.kEjectAlgae));
 
     state
         .shouldEjectAlgae
@@ -294,11 +298,11 @@ public class RobotContainer {
         .and(superstructure.canEjectAlgae)
         .onTrue(ejectAlgaeSequence());
 
-    // score algae (net)
-    state
-        .shouldScoreAlgaeNet
-        .and(superstructure.hasAlgae)
-        .onTrue(superstructure.setPosition(Position.NET));
+    // score algae (net) -- commented out until new intake
+    // state
+    //     .shouldScoreAlgaeNet
+    //     .and(superstructure.hasAlgae)
+    //     .onTrue(superstructure.setPosition(Position.kNet));
 
     // state
     //     .shouldScoreAlgaeNet
@@ -310,7 +314,7 @@ public class RobotContainer {
     state
         .shouldIntakeCoralFloor
         .and(superstructure.hasCoral.negate())
-        .onTrue(superstructure.setPosition(Position.FLOOR));
+        .onTrue(superstructure.setPosition(Position.kFloor));
 
     state
         .shouldIntakeCoralFloor
@@ -322,7 +326,7 @@ public class RobotContainer {
     state
         .shouldIntakeCoralStation
         .and(superstructure.hasCoral.negate())
-        .onTrue(superstructure.setPosition(Position.STATION));
+        .onTrue(superstructure.setPosition(Position.kStation));
 
     state
         .shouldIntakeCoralStation
@@ -343,7 +347,7 @@ public class RobotContainer {
     state
         .shouldScoreCoralL1
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(Position.L1));
+        .onTrue(superstructure.setPosition(Position.kL1));
 
     state
         .shouldScoreCoralL1
@@ -367,7 +371,7 @@ public class RobotContainer {
     state
         .shouldScoreCoralL2
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(Position.L2));
+        .onTrue(superstructure.setPosition(Position.kL2));
 
     state
         .shouldScoreCoralL2
@@ -379,7 +383,7 @@ public class RobotContainer {
     state
         .shouldScoreCoralL3
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(Position.L3));
+        .onTrue(superstructure.setPosition(Position.kL3));
 
     state
         .shouldScoreCoralL3
@@ -392,14 +396,16 @@ public class RobotContainer {
     state
         .shouldScoreCoralL4
         .and(superstructure.hasCoral)
-        .onTrue(superstructure.setPosition(Position.L4));
+        .onTrue(superstructure.setPosition(Position.kL4));
 
     state
         .shouldScoreCoralL4
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL4)
         .and(shouldInitiateCoralSequence)
-        .onTrue(scoreL4Sequence());
+        .onTrue(state.resetScoringPose().andThen(state.setIntent(Intent.kCoralScoreL4Final)));
+
+    configureL4Sequence();
 
     // reset intent once coral has been scored
     state
@@ -409,23 +415,29 @@ public class RobotContainer {
         .and(superstructure.hasCoral.negate())
         .onTrue(
             // backup a little bit to avoid hitting corals on the way down
-            driveForward(Inches.of(-1))
-                .withTimeout(0.5)
-                .until(hasDriverInput)
-                .andThen(state.setIntent(Intent.kNone)));
+            driveForward(Inches.of(-1)).andThen(state.setIntent(Intent.kNone)));
 
     // hover
-    state.shouldHover.onTrue(superstructure.setPosition(Position.HOVER));
+    state.shouldHover.onTrue(superstructure.setPosition(Position.kHover));
 
     // climb
     state.shouldClimbReady.onTrue(
-        superstructure.setPosition(Position.CLIMB).andThen(climb.ready()));
+        superstructure.setPosition(Position.kClimb).andThen(climb.ready()));
 
     state
         .shouldClimbEngage
         .and(climb.isLocked)
         .onTrue(
             drivetrain.wheelsForward().withTimeout(Milliseconds.of(100)).andThen(climb.engage()));
+
+    // elevator safety to deal with game pieces potentially stuck within frame:
+    // if stall is detected when idle (stowed mode) and elevator is below
+    // threshold then automatically go into hover mode
+    state
+        .idle
+        .and(superstructure.isElevatorStalled)
+        .and(() -> elevator.getPosition() < 32)
+        .onTrue(state.setIntent(Intent.kHover));
 
     // [default behavior] stow when no intent is specified
     //
@@ -436,10 +448,10 @@ public class RobotContainer {
         Commands.either(
             Commands.sequence(
                 superstructure.setHeightOverride(60),
-                driveForward(Inches.of(-10)).withTimeout(1.5),
+                driveForward(Inches.of(-10)),
                 superstructure.resetHeightOverride(),
-                superstructure.setPosition(Position.STOWED)),
-            superstructure.setPosition(Position.STOWED),
+                superstructure.setPosition(Position.kStowed)),
+            superstructure.setPosition(Position.kStowed),
             () -> elevator.isAbovePosition(52)));
 
     // LED
@@ -500,8 +512,32 @@ public class RobotContainer {
     return state.isPoseTrusted.getAsBoolean() ? LedVision.Type.kTrusted : LedVision.Type.kUnknown;
   }
 
-  /** Command to drive forward fixed distance. */
+  private static final Distance maxAccelerationOnlyDistance =
+      Meters.of(
+          Math.pow(Constants.DriveConstants.maxAccelerationTime.in(Seconds), 2)
+              * Constants.DriveConstants.maxAcceleration.in(MetersPerSecondPerSecond));
+
+  /** Estimates distance drive time based on the max acceleration and speed. */
+  private Time estimateDriveTime(Distance distance) {
+    // acceleration/decelaration only motion
+    if (distance.lte(maxAccelerationOnlyDistance)) {
+      return Seconds.of(
+          Math.sqrt(
+                  distance.in(Meters)
+                      / Constants.DriveConstants.maxAcceleration.in(MetersPerSecondPerSecond))
+              * 2);
+    }
+
+    return Seconds.of(
+        2 * Constants.DriveConstants.maxAccelerationTime.in(Seconds)
+            + (distance.in(Meters) - maxAccelerationOnlyDistance.in(Meters))
+                / Constants.DriveConstants.maxSpeed.in(MetersPerSecond));
+  }
+
+  /** Command to drive forward/backward fixed distance with driver interruption. */
   private Command driveForward(Distance distance) {
+    // timeout based on the distance, max acceleration and speed (+20%)
+    final var timeout = estimateDriveTime(distance).times(1.2);
     return new InstantCommand(
             () -> {
               final var pose = state.getRobotPose();
@@ -511,7 +547,10 @@ public class RobotContainer {
               state.setTargetPose(
                   new Pose2d(pose.getTranslation().plus(vector), pose.getRotation()));
             })
-        .andThen(new DriveToPose(drivetrain, state::getTargetPose, state::getRobotPose));
+        .andThen(
+            new DriveToPose(drivetrain, state::getTargetPose, state::getRobotPose)
+                .withTimeout(timeout)
+                .until(hasDriverInput));
   }
 
   /** Command sequence to eject algae and reset intent and presence. */
@@ -524,20 +563,52 @@ public class RobotContainer {
         .andThen(new InstantCommand(() -> superstructure.setAlgaePresence(false)));
   }
 
-  /** Command sequence to score at L4 and reset. */
-  private Command scoreL4Sequence() {
-    return state
-        .resetScoringPose()
-        .andThen(
+  private void configureL4Sequence() {
+    // try to score by lowering the elevator to the "L4 scored" position until
+    // we successfully reach the position or stall is detected, in case of the latter
+    // go into retry mode
+    state.shouldScoreCoralL4Final.onTrue(
+        superstructure
+            .maintainPosition(Position.kL4Scored)
+            .raceWith(
+                Commands.waitUntil(superstructure::isDoneScoringL4),
+                Commands.waitUntil(superstructure.isElevatorStalled))
+            .andThen(
+                Commands.either(
+                    state.setIntent(Intent.kCoralScoreL4Retry),
+                    Commands.sequence(
+                        state.markScoringTarget(),
+                        driveForward(Inches.of(-10)),
+                        state.setIntent(Intent.kNone)),
+                    superstructure.isElevatorStalled)));
+
+    // manual retry does not capture drive subsystem and allows operator
+    // to reposition while maintaining elevator above the reef and waiting
+    // for an input to rescore
+    state
+        .shouldScoreCoralL4Retry
+        .and(isAutonomousMode.negate())
+        .onTrue(
+            superstructure
+                .maintainPosition(Position.kL4Retry)
+                .until(scoreButton)
+                .andThen(state.setIntent(Intent.kCoralScoreL4Final)));
+
+    // autonomous retry captures drive subsystem to automatically attempt
+    // to reposition the robot and retry the scoring sequence
+    state
+        .shouldScoreCoralL4Retry
+        .and(isAutonomousMode)
+        .and(state::canAutoRetryL4)
+        .onTrue(
             Commands.sequence(
-                driveForward(Inches.of(13)).withTimeout(1),
-                state.setIntent(Intent.kCoralScoreL4Final),
                 superstructure
-                    .maintainPosition(Position.L4_SCORED)
-                    .until(superstructure::isDoneScoringL4),
-                state.markScoringTarget(),
-                driveForward(Inches.of(-10)).withTimeout(1).until(hasDriverInput),
-                state.setIntent(Intent.kNone)));
+                    .maintainPosition(Position.kL4Retry)
+                    .withTimeout(Milliseconds.of(200)),
+                new DriveToPose(drivetrain, state::getAutoRetryL4Pose, state::getRobotPose)
+                    .withTimeout(Milliseconds.of(400)),
+                Commands.waitTime(Milliseconds.of(200)),
+                state.setIntent(Intent.kCoralScoreL4Final)));
   }
 
   public Command getAutonomousCommand() {

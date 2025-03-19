@@ -4,13 +4,17 @@ import choreo.auto.AutoFactory;
 import choreo.auto.AutoRoutine;
 import choreo.auto.AutoTrajectory;
 import edu.wpi.first.wpilibj2.command.Command;
+import frc.robot.RobotState.Intent;
+import frc.robot.subsystems.Superstructure;
 
 public class AutoRoutines {
   private final AutoFactory factory;
   private final RobotState state;
+  private final Superstructure superstructure;
 
-  public AutoRoutines(AutoFactory factory) {
+  public AutoRoutines(AutoFactory factory, Superstructure superstructure) {
     this.factory = factory;
+    this.superstructure = superstructure;
     this.state = RobotState.getInstance();
   }
 
@@ -22,24 +26,44 @@ public class AutoRoutines {
     return routine;
   }
 
-  public AutoRoutine scoreL2() {
-    final AutoRoutine routine = factory.newRoutine("ScoreL2");
+  private int getLocationIndex(char c) {
+    return c - 'A';
+  }
 
-    routine.active().onTrue(state.scoreAuto(2));
+  public AutoRoutine scoreL4x(char c) {
+    final AutoRoutine routine = factory.newRoutine("Score L4 (" + c + ")");
+
+    routine.active().onTrue(state.scoreAutoL4(getLocationIndex(c)));
     return routine;
   }
 
-  public AutoRoutine scoreL3() {
-    final AutoRoutine routine = factory.newRoutine("ScoreL3");
+  public AutoRoutine scoreL4IL() {
+    final AutoRoutine routine = factory.newRoutine("Score L4 (I,L)");
 
-    routine.active().onTrue(state.scoreAuto(3));
-    return routine;
-  }
+    final AutoTrajectory trajIto3 = routine.trajectory("Ito3");
+    final AutoTrajectory traj3toLeft = routine.trajectory("3toLeft");
 
-  public AutoRoutine scoreL4() {
-    final AutoRoutine routine = factory.newRoutine("ScoreL4");
+    routine.active().onTrue(state.scoreAutoL4(getLocationIndex('I')));
 
-    routine.active().onTrue(state.scoreAuto(4));
+    state
+        .idle
+        .and(() -> state.getAutoScoringStep() == 1)
+        .and(superstructure.hasCoral.negate())
+        .onTrue(trajIto3.cmd());
+
+    // trajIto3.atTime("IntakeDeploy").onTrue(state.setIntent(Intent.kCoralFloorIntake));
+    trajIto3.atTime(0.9).onTrue(state.setIntent(Intent.kCoralFloorIntake));
+
+    // if we have failed to intake the piece, then reset intent and chill
+    // otherwise, reposition for the next scoring leg
+    trajIto3.done().and(superstructure.hasCoral).onTrue(traj3toLeft.cmd());
+    trajIto3.done().and(superstructure.hasCoral.negate()).onTrue(state.setIntent(Intent.kNone));
+
+    traj3toLeft
+        .done()
+        .and(superstructure.hasCoral)
+        .onTrue(state.scoreAutoL4(getLocationIndex('L')));
+
     return routine;
   }
 

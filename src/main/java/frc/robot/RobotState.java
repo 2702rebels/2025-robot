@@ -91,6 +91,12 @@ public class RobotState {
   private Optional<Pose2d> scoringPose = Optional.empty();
   private int scoringTarget = -1;
 
+  // tracks number of automatic scoring retries when scoring L4
+  private int autoRetryCountL4 = 0;
+
+  // tracks steps in multi-coral auto sequences
+  private int autoScoringStep = 0;
+
   private boolean auto; // indicator of automatic scoring mode
 
   /*
@@ -166,6 +172,9 @@ public class RobotState {
 
     /** Score coral at L4 (final motion) */
     kCoralScoreL4Final,
+
+    /** Score coral at L4 (retry motion) */
+    kCoralScoreL4Retry,
 
     /** Intake algae (L2 low) */
     kAlgaeIntakeL2,
@@ -280,6 +289,12 @@ public class RobotState {
   @Logged(name = "ShouldScoreCoralL4", importance = Importance.INFO)
   public final Trigger shouldScoreCoralL4 = new Trigger(() -> intent == Intent.kCoralScoreL4);
 
+  @Logged(name = "ShouldScoreCoralL4Final", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL4Final = new Trigger(() -> intent == Intent.kCoralScoreL4Final);
+
+  @Logged(name = "ShouldScoreCoralL4Retry", importance = Importance.INFO)
+  public final Trigger shouldScoreCoralL4Retry = new Trigger(() -> intent == Intent.kCoralScoreL4Retry);
+
   @Logged(name = "ShouldIntakeAlgaeL2", importance = Importance.INFO)
   public final Trigger shouldIntakeAlgaeL2 = new Trigger(() -> intent == Intent.kAlgaeIntakeL2);
 
@@ -375,13 +390,22 @@ public class RobotState {
                     break;
                   case 4:
                     this.intent = Intent.kCoralScoreL4;
+                    autoRetryCountL4 = 0;
                     break;
                 }
               } else {
                 // reset scoring pose when intent is removed
                 scoringPose = Optional.empty();
-                scoringTarget = -1;
-                auto = false;
+
+                // do not reset target/auto if still within L4 sequence
+                if (intent != Intent.kCoralScoreL4Final && intent != Intent.kCoralScoreL4Retry) {
+                  scoringTarget = -1;
+                  auto = false;
+                }
+
+                if (intent == Intent.kCoralScoreL4Retry) {
+                  autoRetryCountL4++;
+                }
 
                 this.intent = intent;
               }
@@ -390,39 +414,42 @@ public class RobotState {
   }
 
   /**
-   * Commands scoring at the specified level (2, 3, or 4) in auto mode, aborts if pose is not
-   * trusted.
+   * Commands scoring at L4 in auto mode, aborts if pose is not trusted.
+   *
+   * @param target Index of the reef scoring pose (see GameConstants) or -1 to use closest pose.
    */
-  public Command scoreAuto(int level) {
+  public Command scoreAutoL4(int target) {
     return Commands.runOnce(
         () -> {
-          if (!isPoseTrusted.getAsBoolean()) {
+          if (!isPoseTrusted.getAsBoolean() || target >= 12) {
             return;
           }
 
-          final var scoringPoseAndTarget = getClosestScoringPose(getRobotPose(), level);
-          if (scoringPoseAndTarget.isEmpty()) {
-            return;
+          if (target < 0) {
+            final var scoringPoseAndTarget = getClosestScoringPose(getRobotPose(), 4);
+            if (scoringPoseAndTarget.isEmpty()) {
+              return;
+            }
+
+            scoringTarget = scoringPoseAndTarget.get().getSecond();
+            scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
+          } else {
+            scoringTarget = 48 + target;
+            scoringPose =
+                Optional.of(
+                    FieldConstants.fieldPose.apply(GameConstants.reefScoringPosesL4[target]));
           }
 
-          switch (level) {
-            case 2:
-              intent = Intent.kCoralScoreL2;
-              break;
-            case 3:
-              intent = Intent.kCoralScoreL3;
-              break;
-            case 4:
-              intent = Intent.kCoralScoreL4;
-              break;
-            default:
-              return; // abort
-          }
-
-          scoringPose = Optional.of(scoringPoseAndTarget.get().getFirst());
-          scoringTarget = scoringPoseAndTarget.get().getSecond();
+          intent = Intent.kCoralScoreL4;
+          autoRetryCountL4 = 0;
           auto = true;
+          autoScoringStep++;
         });
+  }
+
+  /** Gets auto-scoring step number. */
+  public int getAutoScoringStep() {
+    return autoScoringStep;
   }
 
   /** Sets target pose to drive to. */
@@ -450,8 +477,8 @@ public class RobotState {
       final var r =
           Math.abs(_scoringPose.getRotation().getRadians() - robotPose.getRotation().getRadians());
 
-      return d < Constants.DriveConstants.PoseChasing.translationTolerance
-          && r < Constants.DriveConstants.PoseChasing.rotationTolerance;
+      return d <= Constants.DriveConstants.PoseChasing.translationTolerance
+          && r <= Constants.DriveConstants.PoseChasing.rotationTolerance;
     }
 
     return false;
@@ -516,6 +543,26 @@ public class RobotState {
   /** Sets robot pose to a known pose and restores trust. */
   public void setRobotPose(Pose2d pose) {
     resetOdometryPose(pose);
+  }
+
+  /** Determines whether L4 automatic retry can proceed. */
+  public boolean canAutoRetryL4() {
+    return autoRetryCountL4 <= 2; // 2 attempts
+  }
+
+  private static final Rotation2d kAutoRetryL4RotationAttempt1 = Rotation2d.fromDegrees(2);
+  private static final Rotation2d kAutoRetryL4RotationAttempt2 = Rotation2d.fromDegrees(-4);
+
+  /** Returns requested robot pose on L4 automatic retry. */
+  public Optional<Pose2d> getAutoRetryL4Pose() {
+    switch (autoRetryCountL4) {
+      case 1:
+        return Optional.of(getRobotPose().rotateBy(kAutoRetryL4RotationAttempt1));
+      case 2:
+        return Optional.of(getRobotPose().rotateBy(kAutoRetryL4RotationAttempt2));
+      default:
+        return Optional.empty();
+    }
   }
 
   /**
@@ -760,6 +807,7 @@ public class RobotState {
   /** Runs logic at the beginning of the autonomous cycle. */
   public void enterAutonomous() {
     reefState.reset();
+    autoScoringStep = 0;
   }
 
   /** Returns observed chassis speeds at the specified timestamp. */

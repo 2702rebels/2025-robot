@@ -21,8 +21,8 @@ public final class GameConstants {
   static {
     final var rotation180 = Rotation2d.fromDegrees(180);
     final var branchShift = Units.inchesToMeters(13) / 2;
-    final var gap = Units.inchesToMeters(11);
-    final var gapL4 = Units.inchesToMeters(11);
+    final var gap = Units.inchesToMeters(8);
+    final var gapL4 = Units.inchesToMeters(2);
 
     for (int i = 0; i < 12; ++i) {
       final var face = FieldConstants.Reef.faces[i / 2];
