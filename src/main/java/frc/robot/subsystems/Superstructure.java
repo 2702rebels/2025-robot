@@ -31,7 +31,7 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kL3Height = 51.5;
   private static final double __kL4Height = 64;
   private static final double __kL4SHeight = 46;
-  private static final double __kL4RHeight = 62;
+  private static final double __kL4RHeight = 63;
   private static final double __kL2AlgaeHeight = 20;
   private static final double __kL3AlgaeHeight = 36;
   private static final double __kNetHeight = 66;
@@ -53,7 +53,7 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kL2AlgaeAngle = 30;
   private static final double __kL3AlgaeAngle = 30;
   private static final double __kNetAngle = 45;
-  private static final double __kClimbAngle = 80;
+  private static final double __kClimbAngle = 10;
 
   private static final double __kBranchOffset = 32;
 

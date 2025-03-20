@@ -20,6 +20,7 @@ import edu.wpi.first.networktables.PubSubOption;
 import edu.wpi.first.networktables.StringPublisher;
 import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.networktables.StructSubscriber;
+import edu.wpi.first.units.measure.Angle;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.MatchType;
 import edu.wpi.first.wpilibj.RobotController;
@@ -256,6 +257,18 @@ public class RobotState {
   @Logged(name = "ScoringPose", importance = Importance.DEBUG)
   public Pose2d getScoringPoseDebug() {
     return scoringPose.isPresent() ? scoringPose.get() : Pose2d.kZero;
+  }
+
+  /** Roll angle */
+  @Logged(name = "Roll", importance = Importance.INFO)
+  public Angle getRoll() {
+    return drivetrain.getRoll();
+  }
+
+  /** Pitch angle */
+  @Logged(name = "Pitch", importance = Importance.INFO)
+  public Angle getPitch() {
+    return drivetrain.getPitch();
   }
 
   // spotless:off

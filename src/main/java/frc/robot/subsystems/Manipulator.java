@@ -128,6 +128,11 @@ public final class Manipulator extends SubsystemBase {
         reversedGuide = false;
       }
 
+      // do not reverse if we think the coral is in
+      if (getCoralPresenceSensor().isPressed()) {
+        reversedGuide = false;
+      }
+
       motorGuide.set((reversedGuide ? -1 : 1) * motorGuideSpeed);
       motorCoral.set(-kCoralIntakeVelocity.get());
     }

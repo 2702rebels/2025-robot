@@ -28,7 +28,7 @@ public final class Climb extends SubsystemBase {
   private static final double __kServoEngaged = 10;
   private static final double __kServoReleased = 120;
   private static final double __kReadyPosition = 14.5;
-  private static final double __kEngagedPosition = 3;
+  private static final double __kEngagedPosition = 0;
 
   private static final double conversionFactor =
       Math.PI * 3 / 50; // 3" diameter, 50:1 reduction ratio
@@ -136,6 +136,9 @@ public final class Climb extends SubsystemBase {
 
   @Logged(name = "IsLocked", importance = Importance.INFO)
   public Trigger isLocked;
+
+  @Logged(name = "IsHolding", importance = Importance.INFO)
+  public Trigger isHolding = new Trigger(() -> holding);
 
   public Command reset() {
     return run(() -> {

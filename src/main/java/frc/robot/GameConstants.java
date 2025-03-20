@@ -22,7 +22,7 @@ public final class GameConstants {
     final var rotation180 = Rotation2d.fromDegrees(180);
     final var branchShift = Units.inchesToMeters(13) / 2;
     final var gap = Units.inchesToMeters(8);
-    final var gapL4 = Units.inchesToMeters(2);
+    final var gapL4 = Units.inchesToMeters(1);
 
     for (int i = 0; i < 12; ++i) {
       final var face = FieldConstants.Reef.faces[i / 2];
