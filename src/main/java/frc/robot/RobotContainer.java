@@ -150,7 +150,7 @@ public class RobotContainer {
   private final Trigger shouldInitiateCoralSequence =
       isAutonomousMode
           .and(state.atScoringPose)
-          .debounce(0.25)
+          .debounce(0.1)
           .or(scoreButton.debounce(0.5, DebounceType.kFalling));
 
   public RobotContainer() {
