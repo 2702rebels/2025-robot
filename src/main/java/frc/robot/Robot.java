@@ -102,7 +102,6 @@ public class Robot extends TimedRobot {
 
   @Override
   public void disabledInit() {
-    vision.disableLogging();
   }
 
   @Override
@@ -140,7 +139,9 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {}
 
   @Override
-  public void teleopExit() {}
+  public void teleopExit() {
+    vision.disableLogging();
+  }
 
   @Override
   public void testInit() {
