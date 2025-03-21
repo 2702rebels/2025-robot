@@ -364,6 +364,13 @@ public class RobotContainer {
             new DriveToPose(drivetrain, state::getScoringPose, state::getRobotPose)
                 .until(hasDriverInput));
 
+    // when in autonomous mode brake momentarily at the end of drive to prevent robot
+    // from moving once the scoring position has been reached
+    isAutonomousMode
+        .and(state.hasScoringPose)
+        .and(state.atScoringPose)
+        .onTrue(drivetrain.brake().withTimeout(Milliseconds.of(150)));
+
     // reset auto mode once driver input is received
     state.isAuto.and(hasDriverInput).onTrue(state.resetAuto());
 
