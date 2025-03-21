@@ -20,8 +20,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 public class DriveToPose extends Command {
-  private final double minDistance = 0.2;
-  private final double maxDistance = 0.8;
+  private final double minDistance = Units.inchesToMeters(6);
+  private final double maxDistance = Units.inchesToMeters(24);
 
   private final Supplier<Optional<Pose2d>> targetPoseSupplier;
   private final Supplier<Pose2d> currentPoseSupplier;
@@ -141,7 +141,7 @@ public class DriveToPose extends Command {
         MathUtil.clamp((distance - minDistance) / (maxDistance - minDistance), 0.0, 1.0);
 
     distanceController.reset(
-        setpointTranslation.getDistance(desiredPose.getTranslation()),
+        setpointTranslation.getDistance(desiredTranslation),
         distanceController.getSetpoint().velocity);
 
     var driveVelocityScalar =
@@ -149,7 +149,7 @@ public class DriveToPose extends Command {
             + distanceController.calculate(distance, 0.0);
 
     // stop driving when at goal
-    if (distance < distanceController.getPositionTolerance()) {
+    if (distance <= distanceController.getPositionTolerance()) {
       driveVelocityScalar = 0.0;
     }
 
@@ -162,7 +162,7 @@ public class DriveToPose extends Command {
             + rotationController.calculate(currentRotation, desiredRotation);
 
     // stop rotating when at goal
-    if (rotationErrorAbs < rotationController.getPositionTolerance()) {
+    if (rotationErrorAbs <= rotationController.getPositionTolerance()) {
       rotationVelocity = 0.0;
     }
 
@@ -215,8 +215,8 @@ public class DriveToPose extends Command {
   /** Checks if the robot pose is within the allowed translation and rotation tolerances. */
   public boolean withinTolerance(double distanceTolerance, Rotation2d rotationTolerance) {
     return running
-        && distanceErrorAbs < distanceTolerance
-        && rotationErrorAbs < rotationTolerance.getRadians();
+        && distanceErrorAbs <= distanceTolerance
+        && rotationErrorAbs <= rotationTolerance.getRadians();
   }
 
   public boolean isRunning() {
