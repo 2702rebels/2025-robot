@@ -511,10 +511,11 @@ public class RobotState {
   public Command markScoringTarget() {
     return new InstantCommand(
         () -> {
-          if (scoringTarget > 0 && auto) {
-            reefState.markTargetScored(scoringTarget);
-            scoringTarget = -1;
-          }
+          // rely on operator instead to mark scored positions
+          // if (scoringTarget > 0 && auto) {
+          //   reefState.markTargetScored(scoringTarget);
+          //   scoringTarget = -1;
+          // }
         });
   }
 
