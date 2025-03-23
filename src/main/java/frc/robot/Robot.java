@@ -47,6 +47,7 @@ public class Robot extends TimedRobot {
           new DogLogOptions()
               .withCaptureConsole(true)
               .withLogExtras(true)
+              .withCaptureDs(true) // capture DS inputs
               .withCaptureNt(true) // required for Epilogue data to be logged to disk
           );
 

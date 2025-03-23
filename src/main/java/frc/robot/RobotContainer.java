@@ -140,9 +140,10 @@ public class RobotContainer {
   private final Trigger hasDriverInput =
       new Trigger(
           () ->
-              !MathUtil.isNear(0, controllerDriver.getLeftX(), kDriverTolerance)
-                  || !MathUtil.isNear(0, controllerDriver.getLeftY(), kDriverTolerance)
-                  || !MathUtil.isNear(0, controllerDriver.getRightX(), kDriverTolerance));
+              DriverStation.isTeleopEnabled()
+                  && (!MathUtil.isNear(0, controllerDriver.getLeftX(), kDriverTolerance)
+                      || !MathUtil.isNear(0, controllerDriver.getLeftY(), kDriverTolerance)
+                      || !MathUtil.isNear(0, controllerDriver.getRightX(), kDriverTolerance)));
 
   // trigger for scoring coral auto or manually
   // NOTE: change to "isAutonomousMode.or(isAuto)" to allow robot to auto score,
@@ -178,8 +179,12 @@ public class RobotContainer {
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
-    configureTriggers();
+    // [!] order matters here: we want to poll driver input first, since in most cases
+    // we set intent via instant command that updates the robot state in place;
+    // thus allowing triggers bound to the intent-based conditions to fire in the same
+    // update cycle (this only works if the logic runs within command init method)
     configureDriverBindings();
+    configureTriggers();
   }
 
   /** Smooth out control input by squaring. */

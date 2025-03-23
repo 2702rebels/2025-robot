@@ -386,6 +386,13 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
       Supplier<Double> vxSupplier, Supplier<Double> vySupplier, Supplier<Double> omegaSupplier) {
     return run(
         () -> {
+          // do not accept teleop input during autonomous:
+          // this prevents the situation when a rogue (broken) controller
+          // somehow sends inputs, e.g. due to driver or hardware malfunction
+          if (DriverStation.isAutonomous()) {
+            return;
+          }
+
           final var vx = vxSupplier.get();
           final var vy = vySupplier.get();
           final var w = omegaSupplier.get();
