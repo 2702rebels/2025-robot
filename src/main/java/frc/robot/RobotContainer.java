@@ -431,6 +431,13 @@ public class RobotContainer {
     state.shouldClimbReady.onTrue(
         superstructure.setPosition(Position.kClimb).andThen(climb.ready()));
 
+    // rumble once climb lock has been acquired
+    state
+        .shouldClimbReady
+        .and(climb.isLocked)
+        .onTrue(rumble(Milliseconds.of(300)))
+        .onTrue(ledFeedback.signalSuccess());
+
     state
         .shouldClimbEngage
         .and(climb.isLocked)

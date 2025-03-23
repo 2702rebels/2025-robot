@@ -27,8 +27,8 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kFloorHeight = 0;
   private static final double __kStationHeight = 26.5;
   private static final double __kL1Height = 16;
-  private static final double __kL2Height = 35.5;
-  private static final double __kL3Height = 51.5;
+  private static final double __kL2Height = 34.5;
+  private static final double __kL3Height = 50.5;
   private static final double __kL4Height = 64;
   private static final double __kL4SHeight = 46;
   private static final double __kL4RHeight = 63;
