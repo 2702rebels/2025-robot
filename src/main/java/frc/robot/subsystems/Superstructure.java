@@ -72,7 +72,7 @@ public final class Superstructure extends SubsystemBase {
 
   // delay on the coral presence trigger (rising edge) to allow
   // motors to run longer when game piece is partially in
-  private static final double kCoralIntakeDelaySeconds = 0.6;
+  private static final double kCoralIntakeDelaySeconds = 0.05;
 
   // delay on the elevator stall detection (rising edge)
   private static final double kElevatorStallDelaySeconds = 0.1;
