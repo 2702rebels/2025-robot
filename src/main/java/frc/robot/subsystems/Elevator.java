@@ -19,7 +19,7 @@ public class Elevator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
   // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
   // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
-  private static final double __kP = 1.95;
+  private static final double __kP = 1.99;
   private static final double __kD = 0;
 
   private static final double __kG0 = 0;
