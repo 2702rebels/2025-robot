@@ -131,11 +131,19 @@ public final class Constants {
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;
 
+      /** PP PID constants for translation controllers */
+      public static final PIDConstants kTranslationPID =
+          new PIDConstants(translationKp, translationKi, translationKd);
+
+      /** PP PID constants for rotation controllers */
+      public static final PIDConstants kRotationPID =
+          new PIDConstants(rotationKp, rotationKi, rotationKd);
+
       /** Translation tolerance */
-      public static final double translationTolerance = Units.inchesToMeters(1);
+      public static final double kTranslationTolerance = Units.inchesToMeters(1);
 
       /** Rotation tolerance */
-      public static final double rotationTolerance = Units.degreesToRadians(2);
+      public static final double kRotationTolerance = Units.degreesToRadians(2);
     }
 
     /** PID configuration for path following controllers */
@@ -159,18 +167,18 @@ public final class Constants {
       public static final double rotationKd = 0;
 
       /** PP PID constants for translation controllers */
-      public static final PIDConstants translationPID =
+      public static final PIDConstants kTranslationPID =
           new PIDConstants(translationKp, translationKi, translationKd);
 
       /** PP PID constants for rotation controllers */
-      public static final PIDConstants rotationPID =
+      public static final PIDConstants kRotationPID =
           new PIDConstants(rotationKp, rotationKi, rotationKd);
 
       /** Translation tolerance */
-      public static final double translationTolerance = Units.inchesToMeters(1);
+      public static final double kTranslationTolerance = Units.inchesToMeters(1);
 
       /** Rotation tolerance */
-      public static final double rotationTolerance = Units.degreesToRadians(2);
+      public static final double kRotationTolerance = Units.degreesToRadians(2);
     }
 
     /** PP robot configuration */

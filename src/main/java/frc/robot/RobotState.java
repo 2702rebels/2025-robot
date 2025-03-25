@@ -98,7 +98,8 @@ public class RobotState {
   // tracks steps in multi-coral auto sequences
   private int autoScoringStep = 0;
 
-  private boolean auto; // indicator of automatic scoring mode
+  // indicator of automatic scoring mode
+  private boolean auto;
 
   /*
    * ReefState to use with Reef widgets
@@ -194,6 +195,9 @@ public class RobotState {
 
     /** Engage climber */
     kClimbEngage,
+
+    /** Ready state when holding onto coral */
+    kCoralReady,
   }
 
   public static enum ScoringStrategy {
@@ -275,6 +279,9 @@ public class RobotState {
   @Logged(name = "Idle", importance = Importance.INFO)
   public final Trigger idle = new Trigger(() -> intent == Intent.kNone);
 
+  @Logged(name = "CoralReady", importance = Importance.INFO)
+  public final Trigger coralReady = new Trigger(() -> intent == Intent.kCoralReady);
+
   @Logged(name = "ShouldHover", importance = Importance.INFO)
   public final Trigger shouldHover = new Trigger(() -> intent == Intent.kHover);
 
@@ -331,6 +338,9 @@ public class RobotState {
 
   @Logged(name = "Auto", importance = Importance.INFO)
   public final Trigger isAuto = new Trigger(() -> auto);
+
+  @Logged(name = "AutoScore", importance = Importance.INFO)
+  public final Trigger isAutoScore = new Trigger(scoreAssist::get);
 
   @Logged(name = "IsPoseTrusted", importance = Importance.INFO)
   public final Trigger isPoseTrusted = new Trigger(() -> odometryTrust >= kOdometryTrustThreshold);
@@ -482,19 +492,7 @@ public class RobotState {
 
   /** Determines whether robot is at the scoring pose. */
   public boolean isAtScoringPose() {
-    if (scoringPose.isPresent()) {
-      final var robotPose = getRobotPose();
-      final var _scoringPose = scoringPose.get();
-
-      final var d = _scoringPose.getTranslation().getDistance(robotPose.getTranslation());
-      final var r =
-          Math.abs(_scoringPose.getRotation().getRadians() - robotPose.getRotation().getRadians());
-
-      return d <= Constants.DriveConstants.PoseChasing.translationTolerance
-          && r <= Constants.DriveConstants.PoseChasing.rotationTolerance;
-    }
-
-    return false;
+    return scoringPose.isPresent() && drivetrain.isAtPose(scoringPose.get());
   }
 
   /** Command to reset scoring pose. */
@@ -511,11 +509,10 @@ public class RobotState {
   public Command markScoringTarget() {
     return new InstantCommand(
         () -> {
-          // rely on operator instead to mark scored positions
-          // if (scoringTarget > 0 && auto) {
-          //   reefState.markTargetScored(scoringTarget);
-          //   scoringTarget = -1;
-          // }
+          if (scoringTarget > 0 && auto && targetAssist.get()) {
+            reefState.markTargetScored(scoringTarget);
+            scoringTarget = -1;
+          }
         });
   }
 
@@ -836,4 +833,10 @@ public class RobotState {
 
   public static final Tunable.BooleanValue visionAssist =
       Tunable.value("Control/VisionAssist", true);
+
+  public static final Tunable.BooleanValue targetAssist =
+      Tunable.value("Control/TargetAssist", false);
+
+  public static final Tunable.BooleanValue scoreAssist =
+      Tunable.value("Control/ScoreAssist", false);
 }

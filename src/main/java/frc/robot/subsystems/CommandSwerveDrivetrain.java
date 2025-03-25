@@ -209,9 +209,9 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
       startSimThread();
     }
 
-    pathXController.setTolerance(Constants.DriveConstants.PathFollowing.translationTolerance);
-    pathYController.setTolerance(Constants.DriveConstants.PathFollowing.translationTolerance);
-    pathThetaController.setTolerance(Constants.DriveConstants.PathFollowing.rotationTolerance);
+    pathXController.setTolerance(Constants.DriveConstants.PathFollowing.kTranslationTolerance);
+    pathYController.setTolerance(Constants.DriveConstants.PathFollowing.kTranslationTolerance);
+    pathThetaController.setTolerance(Constants.DriveConstants.PathFollowing.kRotationTolerance);
 
     Tunable.bind("Drive/PathX", pathXController);
     Tunable.bind("Drive/PathY", pathYController);
@@ -444,8 +444,8 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           this::getRobotSpeeds,
           this::driveAt,
           new PPHolonomicDriveController(
-              DriveConstants.PathFollowing.translationPID,
-              DriveConstants.PathFollowing.rotationPID),
+              DriveConstants.PathFollowing.kTranslationPID,
+              DriveConstants.PathFollowing.kRotationPID),
           DriveConstants.robotConfig,
           // DO NOT flip the path since this command is intended to be used
           // with on-the-fly generated trajectories
@@ -515,6 +515,17 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   /** Stops the robot by setting speeds to zero. */
   public void stop() {
     driveAt(kZeroSpeeds);
+  }
+
+  /** Determines whether robot is at the specified pose. */
+  public boolean isAtPose(Pose2d pose) {
+    final var robotPose = getPose();
+
+    final var d = pose.getTranslation().getDistance(robotPose.getTranslation());
+    final var r = Math.abs(pose.getRotation().getRadians() - robotPose.getRotation().getRadians());
+
+    return d <= Constants.DriveConstants.PoseChasing.kTranslationTolerance
+        && r <= Constants.DriveConstants.PoseChasing.kRotationTolerance;
   }
 
   /**

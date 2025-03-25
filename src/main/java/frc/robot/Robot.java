@@ -88,12 +88,20 @@ public class Robot extends TimedRobot {
 
   @Override
   public void robotPeriodic() {
+    // uncomment to run periodic at real-time priority, may introduce unintended side-effects, see:
+    // https://docs.advantagekit.org/getting-started/template-projects/spark-swerve-template/#real-time-thread-priority
+    // Threads.setCurrentThreadPriority(true, 99);
+
+    DogLog.timestamp("Periodic");
+
     Tunable.periodic();
     PhoenixUtil.refreshSignals();
 
     robotState.enterPeriodic();
     CommandScheduler.getInstance().run();
     robotState.exitPeriodic();
+
+    // Threads.setCurrentThreadPriority(false, 10);
 
     if (Constants.Settings.statsEnabled) {
       DogLog.log("Stats/PeriodicMS", (RobotController.getFPGATime() - getLoopStartTime()) / 1000.0);

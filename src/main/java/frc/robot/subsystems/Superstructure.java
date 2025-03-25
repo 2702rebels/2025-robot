@@ -96,6 +96,10 @@ public final class Superstructure extends SubsystemBase {
   // of the algae, we instead rely on setting this state manually
   private boolean hasAlgaeState;
 
+  // allows delaying deployment of the superstructure during driving
+  // to the auto scoring position
+  private boolean delayed;
+
   public Superstructure(Elevator elevator, Pivot pivot, Manipulator manipulator) {
     this.elevator = elevator;
     this.pivot = pivot;
@@ -171,6 +175,7 @@ public final class Superstructure extends SubsystemBase {
     kNet,
     kHover, // special position to allow trapped game pieces to escape
     kClimb, // special position for climbing
+    kReady, // special position for ready to score the coral
   }
 
   /** Trigger for coral presence. */
@@ -228,6 +233,10 @@ public final class Superstructure extends SubsystemBase {
   /** Trigger for stalled elevator. */
   @Logged(name = "IsElevatorStalled", importance = Importance.INFO)
   public final Trigger isElevatorStalled;
+
+  /** Trigger for delayed deployment. */
+  @Logged(name = "IsDelayed", importance = Importance.INFO)
+  public final Trigger isDelayed = new Trigger(() -> delayed);
 
   public Command setPosition(Position position) {
     return runOnce(
@@ -292,6 +301,11 @@ public final class Superstructure extends SubsystemBase {
 
   public boolean isDoneScoringL4() {
     return elevator.isAtPosition(kL4SHeight.get());
+  }
+
+  /** Sets delayed flag on the superstructure to prevent deployment during auto driving. */
+  public void setDelayed(boolean value) {
+    delayed = value;
   }
 
   /** Returns effective transition angle that depends on type of game piece being controlled. */
@@ -403,6 +417,7 @@ public final class Superstructure extends SubsystemBase {
     positionProfiles.put(Position.kEjectAlgae, Pair.of(kFloorHeight.get(), kEjectAlgaeAngle.get()));
     positionProfiles.put(Position.kHover, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
     positionProfiles.put(Position.kClimb, Pair.of(kFloorHeight.get(), kClimbAngle.get()));
+    positionProfiles.put(Position.kReady, Pair.of(kStowedHeight.get(), kTransitionAngle.get()));
     // spotless:on
   }
 

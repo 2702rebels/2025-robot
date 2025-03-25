@@ -76,8 +76,8 @@ public class DriveToPose extends Command {
     this.stopCondition = stopCondition;
     addRequirements(drive);
 
-    distanceController.setTolerance(Constants.DriveConstants.PoseChasing.translationTolerance);
-    rotationController.setTolerance(Constants.DriveConstants.PoseChasing.rotationTolerance);
+    distanceController.setTolerance(Constants.DriveConstants.PoseChasing.kTranslationTolerance);
+    rotationController.setTolerance(Constants.DriveConstants.PoseChasing.kRotationTolerance);
     rotationController.enableContinuousInput(-Math.PI, Math.PI);
   }
 
@@ -175,13 +175,8 @@ public class DriveToPose extends Command {
             rotationVelocity,
             currentPose.getRotation()));
 
-    final var setpointPose =
-        new Pose2d(setpointTranslation, new Rotation2d(distanceController.getSetpoint().position));
-
     if (Constants.Settings.rioLoggingEnabled) {
       // spotless:off
-      DogLog.log("DriveToPose/Setpoint", setpointPose);
-      DogLog.log("DriveToPose/Goal", desiredPose);
       DogLog.log("DriveToPose/DistanceMeasured", distance);
       DogLog.log("DriveToPose/DistanceSetpoint", distanceController.getSetpoint().position);
       DogLog.log("DriveToPose/DistanceVelocity", distanceController.getSetpoint().velocity);
