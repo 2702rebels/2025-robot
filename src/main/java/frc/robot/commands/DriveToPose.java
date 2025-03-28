@@ -11,6 +11,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.units.measure.LinearAcceleration;
+import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants;
 import frc.robot.Constants.DriveConstants;
@@ -30,15 +32,7 @@ public class DriveToPose extends Command {
   private boolean running;
   private Translation2d setpointTranslation;
 
-  private final ProfiledPIDController distanceController =
-      new ProfiledPIDController(
-          DriveConstants.PoseChasing.translationKp,
-          DriveConstants.PoseChasing.translationKi,
-          DriveConstants.PoseChasing.translationKd,
-          new TrapezoidProfile.Constraints(
-              DriveConstants.maxSpeed.in(MetersPerSecond) * 0.5,
-              DriveConstants.maxAcceleration.in(MetersPerSecondPerSecond) * 0.5),
-          Constants.cyclePeriodSeconds);
+  private final ProfiledPIDController distanceController;
 
   private final ProfiledPIDController rotationController =
       new ProfiledPIDController(
@@ -55,26 +49,58 @@ public class DriveToPose extends Command {
 
   public DriveToPose(
       CommandSwerveDrivetrain drive, Pose2d targetPose, Supplier<Pose2d> currentPoseSupplier) {
-    this(drive, () -> Optional.of(targetPose), currentPoseSupplier, null);
+    this(
+        drive,
+        () -> Optional.of(targetPose),
+        currentPoseSupplier,
+        DriveConstants.maxSpeed.times(0.5),
+        DriveConstants.maxAcceleration.times(0.5),
+        null);
   }
 
   public DriveToPose(
       CommandSwerveDrivetrain drive,
       Supplier<Optional<Pose2d>> targetPoseSupplier,
       Supplier<Pose2d> currentPoseSupplier) {
-    this(drive, targetPoseSupplier, currentPoseSupplier, null);
+    this(
+        drive,
+        targetPoseSupplier,
+        currentPoseSupplier,
+        DriveConstants.maxSpeed.times(0.5),
+        DriveConstants.maxAcceleration.times(0.5),
+        null);
   }
 
   public DriveToPose(
       CommandSwerveDrivetrain drive,
       Supplier<Optional<Pose2d>> targetPoseSupplier,
       Supplier<Pose2d> currentPoseSupplier,
+      LinearVelocity maxVelocity,
+      LinearAcceleration maxAcceleration) {
+    this(drive, targetPoseSupplier, currentPoseSupplier, maxVelocity, maxAcceleration, null);
+  }
+
+  public DriveToPose(
+      CommandSwerveDrivetrain drive,
+      Supplier<Optional<Pose2d>> targetPoseSupplier,
+      Supplier<Pose2d> currentPoseSupplier,
+      LinearVelocity maxVelocity,
+      LinearAcceleration maxAcceleration,
       BooleanSupplier stopCondition) {
     this.drive = drive;
     this.targetPoseSupplier = targetPoseSupplier;
     this.currentPoseSupplier = currentPoseSupplier;
     this.stopCondition = stopCondition;
     addRequirements(drive);
+
+    distanceController =
+        new ProfiledPIDController(
+            DriveConstants.PoseChasing.translationKp,
+            DriveConstants.PoseChasing.translationKi,
+            DriveConstants.PoseChasing.translationKd,
+            new TrapezoidProfile.Constraints(
+                maxVelocity.in(MetersPerSecond), maxAcceleration.in(MetersPerSecondPerSecond)),
+            Constants.cyclePeriodSeconds);
 
     distanceController.setTolerance(Constants.DriveConstants.PoseChasing.kTranslationTolerance);
     rotationController.setTolerance(Constants.DriveConstants.PoseChasing.kRotationTolerance);

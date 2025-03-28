@@ -342,6 +342,9 @@ public class RobotState {
   @Logged(name = "AutoScore", importance = Importance.INFO)
   public final Trigger isAutoScore = new Trigger(scoreAssist::get);
 
+  @Logged(name = "ShouldScoreL4Eject", importance = Importance.INFO)
+  public final Trigger shouldScoreL4Eject = new Trigger(scoreL4Eject::get);
+
   @Logged(name = "IsPoseTrusted", importance = Importance.INFO)
   public final Trigger isPoseTrusted = new Trigger(() -> odometryTrust >= kOdometryTrustThreshold);
 
@@ -835,8 +838,10 @@ public class RobotState {
       Tunable.value("Control/VisionAssist", true);
 
   public static final Tunable.BooleanValue targetAssist =
-      Tunable.value("Control/TargetAssist", false);
+      Tunable.value("Control/TargetAssist", true);
 
-  public static final Tunable.BooleanValue scoreAssist =
-      Tunable.value("Control/ScoreAssist", false);
+  public static final Tunable.BooleanValue scoreAssist = Tunable.value("Control/ScoreAssist", true);
+
+  public static final Tunable.BooleanValue scoreL4Eject =
+      Tunable.value("Control/ScoreL4Eject", true);
 }

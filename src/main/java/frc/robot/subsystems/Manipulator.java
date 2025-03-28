@@ -171,6 +171,16 @@ public final class Manipulator extends SubsystemBase {
         .withName("EjectCoral");
   }
 
+  public Command ejectCoralReverse() {
+    return runEnd(
+            () -> {
+              motorCoral.set(-kCoralEjectVelocity.get());
+              motorGuide.stopMotor();
+            },
+            this::stopMotors)
+        .withName("EjectCoralReverse");
+  }
+
   public Command intakeAlgae() {
     return runEnd(
             () -> {
