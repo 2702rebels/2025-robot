@@ -360,6 +360,9 @@ public class RobotContainer {
         .and(superstructure.canStationIntake)
         .whileTrue(manipulator.intakeCoral());
 
+    // reindex coral after acquisition
+    state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(manipulator.reindexCoral());
+
     // reset intent once coral has been acquired
     state
         .shouldIntakeCoral

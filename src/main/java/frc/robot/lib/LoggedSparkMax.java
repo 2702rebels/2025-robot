@@ -35,6 +35,10 @@ public class LoggedSparkMax extends SparkMax {
     config.limitSwitch.forwardLimitSwitchEnabled(false).reverseLimitSwitchEnabled(false);
   }
 
+  public RelativeEncoder getRelativeEncoder() {
+    return encoder;
+  }
+
   @Logged(name = "Temperature", importance = Importance.INFO)
   public double getTemperature() {
     return getMotorTemperature();

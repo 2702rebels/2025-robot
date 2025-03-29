@@ -1,6 +1,10 @@
 package frc.robot.subsystems;
 
+import com.revrobotics.spark.ClosedLoopSlot;
+import com.revrobotics.spark.SparkBase.ControlType;
+import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLimitSwitch;
+import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
@@ -28,6 +32,9 @@ public final class Manipulator extends SubsystemBase {
   private static final double __kAlgaeEjectVelocity = 0.5;
   private static final double __kAlgaeHoldVelocity = 0.1;
 
+  private static final double __kCoralP = 3.5;
+  private static final double __kCoralReindexPosition = 0.15;
+
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;
 
@@ -38,6 +45,8 @@ public final class Manipulator extends SubsystemBase {
   private boolean stallDetectionActive = false;
 
   private long reversedAt = -1;
+
+  private SparkClosedLoopController controllerCoral;
 
   @Logged(name = "Stalled", importance = Importance.DEBUG)
   public boolean isCoralMotorStalled() {
@@ -88,12 +97,23 @@ public final class Manipulator extends SubsystemBase {
                   .signals
                   .primaryEncoderVelocityAlwaysOn(true);
 
+              config
+                  .closedLoop
+                  .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
+                  .velocityFF(0)
+                  .p(__kCoralP);
+
               // conversion factor based on the gear ratio
               config
                   .encoder
                   .positionConversionFactor(1 / kCoralGearRatio)
                   .velocityConversionFactor(1 / kCoralGearRatio);
             });
+
+    controllerCoral = motorCoral.getClosedLoopController();
+
+    // make configuration tunable (must be done after configuration is bound to the motor)
+    Tunable.bind("Manipulator/Coral", motorCoral, ClosedLoopSlot.kSlot0);
   }
 
   private void stopMotors() {
@@ -145,6 +165,11 @@ public final class Manipulator extends SubsystemBase {
    */
   public SparkLimitSwitch getCoralPresenceSensor() {
     return motorGuide.getForwardLimitSwitch();
+  }
+
+  @Logged(name = "CoralPosition", importance = Importance.INFO)
+  public double getCoralPosition() {
+    return motorCoral.getRelativeEncoder().getPosition();
   }
 
   public Command intakeCoral() {
@@ -211,6 +236,18 @@ public final class Manipulator extends SubsystemBase {
         .withName("HoldAlgae");
   }
 
+  public Command reindexCoral() {
+    return startRun(
+            () -> {
+              motorCoral.getRelativeEncoder().setPosition(0);
+              motorGuide.stopMotor();
+            },
+            () -> {
+              controllerCoral.setReference(kCoralReindexPosition.get(), ControlType.kPosition);
+            })
+        .withName("ReindexCoral");
+  }
+
   public Command stop() {
     return run(this::stopMotors).withName("ManipulatorStop");
   }
@@ -226,5 +263,7 @@ public final class Manipulator extends SubsystemBase {
   private static Tunable.DoubleValue kAlgaeIntakeVelocity = Tunable.value("Manipulator/Algae/IntakeVelocity", __kAlgaeIntakeVelocity);
   private static Tunable.DoubleValue kAlgaeEjectVelocity = Tunable.value("Manipulator/Algae/EjectVelocity", __kAlgaeEjectVelocity);
   private static Tunable.DoubleValue kAlgaeHoldVelocity = Tunable.value("Manipulator/Algae/HoldVelocity", __kAlgaeHoldVelocity);
+
+  private static Tunable.DoubleValue kCoralReindexPosition = Tunable.value("Manipulator/Coral/ReindexPosition", __kCoralReindexPosition);
   // spotless:on
 }
