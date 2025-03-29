@@ -111,10 +111,16 @@ public final class Constants {
     public static final AngularAcceleration maxAngularAcceleration =
         maxAngularRate.div(maxAccelerationTime);
 
+    /** Speed modifier for auto modes. */
+    public static final double kAutoSpeedModifier = 0.5;
+
+    /** Speed modifier for auto modes (L4 scoring). */
+    public static final double kAutoL4SpeedModifier = 0.5;
+
     /** PID configuration to pose chasing controllers */
     public static final class PoseChasing {
       /** kP used for the translation PID drive controllers */
-      public static final double translationKp = 2.5;
+      public static final double translationKp = 3;
 
       /** kI used for the translation PID drive controllers */
       public static final double translationKi = 0;
@@ -123,7 +129,7 @@ public final class Constants {
       public static final double translationKd = 0;
 
       /** kP used for the rotation PID drive controllers */
-      public static final double rotationKp = 2.5;
+      public static final double rotationKp = 3;
 
       /** kI used for the rotation PID drive controllers */
       public static final double rotationKi = 0;

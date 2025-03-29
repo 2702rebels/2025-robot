@@ -16,6 +16,7 @@ import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.units.measure.LinearAcceleration;
 import edu.wpi.first.units.measure.LinearVelocity;
@@ -609,33 +610,33 @@ public class RobotContainer {
         estimateDriveTime(Meters.of(distance), maxVelocity, maxAcceleration));
   }
 
-  private static final LinearVelocity maxHalfVelocity =
-      Constants.DriveConstants.maxSpeed.times(0.5);
+  /** Creates a pose in front of the given pose offset by the specified distance. */
+  private static Pose2d getPoseInFront(Pose2d pose, Distance distance) {
+    final var vector = new Translation2d(distance.in(Meters), 0).rotateBy(pose.getRotation());
+    return new Pose2d(pose.getTranslation().plus(vector), pose.getRotation());
+  }
 
-  private static final LinearAcceleration maxHalfAcceleration =
-      Constants.DriveConstants.maxAcceleration.times(0.5);
+  private static final LinearVelocity maxAutoVelocity =
+      Constants.DriveConstants.maxSpeed.times(Constants.DriveConstants.kAutoSpeedModifier);
+
+  private static final LinearAcceleration maxAutoAcceleration =
+      Constants.DriveConstants.maxAcceleration.times(Constants.DriveConstants.kAutoSpeedModifier);
 
   /** Creates a command to drive forward/backward fixed distance with driver interruption. */
   private Command driveForward(Distance distance) {
     // timeout based on the distance, max acceleration and speed (+20%)
     final var timeout =
-        estimateDriveTime(distance, maxHalfVelocity, maxHalfAcceleration).times(1.2);
-    return new InstantCommand(
-            () -> {
-              final var pose = state.getRobotPose();
-              final var vector =
-                  new Translation2d(distance.in(Meters), 0).rotateBy(pose.getRotation());
+        estimateDriveTime(distance, maxAutoVelocity, maxAutoAcceleration).times(1.2);
 
-              state.setTargetPose(
-                  new Pose2d(pose.getTranslation().plus(vector), pose.getRotation()));
-            })
+    return new InstantCommand(
+            () -> state.setTargetPose(getPoseInFront(state.getRobotPose(), distance)))
         .andThen(
             new DriveToPose(
                     drivetrain,
                     state::getTargetPose,
                     state::getRobotPose,
-                    maxHalfVelocity,
-                    maxHalfAcceleration)
+                    maxAutoVelocity,
+                    maxAutoAcceleration)
                 .withTimeout(timeout)
                 .until(hasDriverInput));
   }
@@ -649,6 +650,39 @@ public class RobotContainer {
           RobotState.Intent.kCoralScoreL4,
           Seconds.of(1.5));
 
+  // normal vector corresponding to a rotation of zero degrees
+  private static final Translation2d kUnit = new Translation2d(1, 0);
+
+  /**
+   * Determines whether we are inside the half-plane on the target side, meaning that robot has to
+   * move backwards/sideways to get there.
+   *
+   * <p>Assume that target pose points into the half plane.
+   *
+   * @param target Target pose defining the half plane
+   * @param current Current pose of the robot
+   * @param threshold Offset to the half plane boundary
+   */
+  private static boolean isInsideHalfPlane(Pose2d target, Pose2d current, double threshold) {
+    final var normal = kUnit.rotateBy(target.getRotation());
+    final var a = normal.getX();
+    final var b = normal.getY();
+    final var c = -(a * target.getX() + b * target.getY());
+
+    return a * current.getX() + b * current.getY() + c >= threshold;
+  }
+
+  private static final double kRepositionThreshold = Units.inchesToMeters(-4);
+  private static final Distance kRepositionDistance = Inches.of(-6);
+
+  /** Returns repositioned scoring pose in front of the target. */
+  private Optional<Pose2d> getRepositionedScoringPose() {
+    final var targetPose = state.getScoringPose();
+    return targetPose.isPresent()
+        ? Optional.of(getPoseInFront(targetPose.get(), kRepositionDistance))
+        : Optional.empty();
+  }
+
   /**
    * Crates a command sequence to drive to position and prepare to score at the L2,L3,L4.
    *
@@ -658,10 +692,40 @@ public class RobotContainer {
   private Command driveAutoScore() {
     return Commands.defer(
         () -> {
-          final var modifier = state.intent == Intent.kCoralScoreL4 ? 0.4 : 0.5;
+          final var modifier =
+              state.intent == Intent.kCoralScoreL4
+                  ? Constants.DriveConstants.kAutoL4SpeedModifier
+                  : Constants.DriveConstants.kAutoSpeedModifier;
 
           final var maxVelocity = Constants.DriveConstants.maxSpeed.times(modifier);
           final var maxAcceleration = Constants.DriveConstants.maxAcceleration.times(modifier);
+
+          final var superstructureTime = kSuperstructureTimeToTarget.get(state.intent);
+
+          // if we are inside the half-plane reposition to a better pose in front of the target
+          final var targetPoseSupplied = state.getScoringPose();
+          if (targetPoseSupplied.isPresent()
+              && isInsideHalfPlane(
+                  targetPoseSupplied.get(), drivetrain.getPose(), kRepositionThreshold)) {
+
+            superstructure.setDelayed(true);
+            return Commands.sequence(
+                new DriveToPose(
+                        drivetrain,
+                        this::getRepositionedScoringPose,
+                        state::getRobotPose,
+                        maxVelocity,
+                        maxAcceleration)
+                    .withTimeout(3),
+                Commands.runOnce(() -> superstructure.setDelayed(false)),
+                Commands.waitTime(superstructureTime != null ? superstructureTime : Seconds.zero()),
+                new DriveToPose(
+                    drivetrain,
+                    state::getScoringPose,
+                    state::getRobotPose,
+                    maxVelocity,
+                    maxAcceleration));
+          }
 
           final var pair =
               createTimedDriveToPose(state::getScoringPose, maxVelocity, maxAcceleration);
@@ -669,7 +733,6 @@ public class RobotContainer {
           final var driveCommand = pair.getFirst();
           final var driveTime = pair.getSecond();
 
-          final var superstructureTime = kSuperstructureTimeToTarget.get(state.intent);
           if (superstructureTime == null) {
             return driveCommand;
           }
