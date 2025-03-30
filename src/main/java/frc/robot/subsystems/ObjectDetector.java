@@ -15,6 +15,8 @@ public class ObjectDetector {
   private final UdpListenerThread<ObjectDetectionPacket> listener;
   private AtomicLong latency = new AtomicLong(0);
 
+  private static long kTimeSyncCutoffMicroseconds = 2000000; // 2 seconds
+
   private static final TimestampedTranslation2d noObject =
       new TimestampedTranslation2d(-1, Translation2d.kZero);
 
@@ -34,6 +36,13 @@ public class ObjectDetector {
   private void packetReceived(ObjectDetectionPacket packet) {
     if (packet.count > 0) {
       final var t = RobotController.getFPGATime();
+
+      // ignore packets that are too far into the past or into the future
+      // indicating time sync issues
+      if (Math.abs(t - packet.timestamp) > kTimeSyncCutoffMicroseconds) {
+        return;
+      }
+
       latency.set(t - packet.timestamp);
 
       // TODO: decide on which object(s) to take when multiple are detected

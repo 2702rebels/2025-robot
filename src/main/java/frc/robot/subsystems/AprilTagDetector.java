@@ -24,6 +24,8 @@ public class AprilTagDetector {
   private final AprilTagPose[] tags = new AprilTagPose[22]; // 22 april tags locations
   private VisionPose pose = new VisionPose();
 
+  private static long kTimeSyncCutoffMicroseconds = 2000000; // 2 seconds
+
   private static final TimestampedValue<Pose2d> noPose = new TimestampedValue<>(-1, Pose2d.kZero);
   private static final TimestampedTranslation2d noTag =
       new TimestampedTranslation2d(-1, Translation2d.kZero);
@@ -46,6 +48,13 @@ public class AprilTagDetector {
 
   private void packetReceived(VisionPacket packet) {
     final var t = RobotController.getFPGATime();
+
+    // ignore packets that are too far into the past or into the future
+    // indicating time sync issues
+    if (Math.abs(t - packet.timestamp) > kTimeSyncCutoffMicroseconds) {
+      return;
+    }
+
     latency.set(t - packet.timestamp);
 
     synchronized (this) {
