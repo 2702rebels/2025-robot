@@ -32,7 +32,7 @@ public class LedFeedback extends SubsystemBase {
     kHoldingAlgae,
 
     /** Climbing sequence active */
-    kClimbing
+    kClimbing,
   }
 
   private final LedResource resource;
@@ -53,6 +53,7 @@ public class LedFeedback extends SubsystemBase {
   private static LEDPattern estoppedPattern = LedResource.blink(Color.kPurple);
   private static LEDPattern successPattern = LedResource.blink(Color.kYellow);
   private static LEDPattern readyPattern = LedResource.blink(Color.kWhite);
+  private static LEDPattern attainmentPattern = LEDPattern.solid(Color.kGreen);
 
   // game-specific patterns
   private static final Map<Type, LEDPattern> kStatePatterns =
@@ -107,5 +108,10 @@ public class LedFeedback extends SubsystemBase {
   /** Commands LED strip to indicate a ready state. */
   public Command signalReady() {
     return runDefault(() -> resource.setFeedbackPattern(readyPattern));
+  }
+
+  /** Commands LED strip to indicate a position attained state. */
+  public Command signalAttainment() {
+    return runDefault(() -> resource.setFeedbackPattern(attainmentPattern));
   }
 }

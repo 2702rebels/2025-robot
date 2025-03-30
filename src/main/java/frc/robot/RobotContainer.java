@@ -446,7 +446,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral.negate())
         .onTrue(
             // backup a little bit to avoid hitting corals on the way down
-            driveForward(Inches.of(-1)).andThen(state.setIntent(Intent.kNone)));
+            driveForward(Inches.of(-2)).andThen(state.setIntent(Intent.kNone)));
 
     // hover
     state.shouldHover.onTrue(superstructure.setPosition(Position.kHover));
@@ -455,12 +455,15 @@ public class RobotContainer {
     state.shouldClimbReady.onTrue(
         superstructure.setPosition(Position.kClimb).andThen(climb.ready()));
 
-    // rumble once climb lock has been acquired
+    // rumble once climb lock has been acquired;
+    // and signal that we are the position to climb
     state
         .shouldClimbReady
         .and(climb.isLocked)
         .onTrue(rumble(Milliseconds.of(300)))
-        .onTrue(ledFeedback.signalSuccess());
+        .onTrue(ledFeedback.signalSuccess())
+        .and(() -> GameConstants.isAtClimbPosition(state.getRobotPose()))
+        .whileTrue(ledFeedback.signalAttainment());
 
     // automatically eject coral if we have one as we engage climber
     state
@@ -554,6 +557,8 @@ public class RobotContainer {
       case kAlgaeIntakeL3:
       case kAlgaeIntakeGround:
         return LedFeedback.Type.kIntakingAlgae;
+      case kClimbReady:
+        return LedFeedback.Type.kClimbing;
       default:
         if (superstructure.hasCoral.getAsBoolean()) {
           return LedFeedback.Type.kHoldingCoral;

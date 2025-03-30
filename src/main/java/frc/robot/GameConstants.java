@@ -2,6 +2,7 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.Meters;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -9,7 +10,10 @@ import edu.wpi.first.math.util.Units;
 
 public final class GameConstants {
   /** Assumes robot bumpers are square. Outer width/height of the robot with bumpers on. */
-  public static final double bumperDimensions = Units.inchesToMeters(34);
+  public static final double kBumperDimensions = Units.inchesToMeters(34);
+
+  /** X coordinate (meters) of the robot center when at climb ready position. */
+  public static final double kClimbPositionX = 8.2;
 
   /**
    * Robot poses for scoring at each reef branch starting at the face closest to the fall in
@@ -29,11 +33,11 @@ public final class GameConstants {
     for (int i = 0; i < 12; ++i) {
       final var face = FieldConstants.Reef.faces[i / 2];
       final var offset =
-          new Translation2d(bumperDimensions / 2 + gap, branchShift * (i % 2 == 0 ? -1 : 1))
+          new Translation2d(kBumperDimensions / 2 + gap, branchShift * (i % 2 == 0 ? -1 : 1))
               .rotateBy(face.getRotation());
 
       final var offsetL4 =
-          new Translation2d(bumperDimensions / 2 + gapL4, branchShift * (i % 2 == 0 ? -1 : 1))
+          new Translation2d(kBumperDimensions / 2 + gapL4, branchShift * (i % 2 == 0 ? -1 : 1))
               .rotateBy(face.getRotation());
 
       final var rotation = face.getRotation().rotateBy(rotation180);
@@ -52,7 +56,13 @@ public final class GameConstants {
 
   /** Safety margin to use for safe field perimeter. */
   public static final double kFieldPerimeterSafetyMargin =
-      bumperDimensions / 2 + Units.inchesToMeters(12);
+      kBumperDimensions / 2 + Units.inchesToMeters(12);
+
+  /** Determines if the pose is at the desired climb position. */
+  public static boolean isAtClimbPosition(Pose2d pose) {
+    final var x = FieldConstants.fieldPose.apply(pose).getX();
+    return MathUtil.isNear(kClimbPositionX, x, Units.inchesToMeters(1));
+  }
 
   /** Determines if the pose is within safe field perimeter to be used for auto. */
   public static boolean withinAutoFieldPerimeter(Pose2d pose) {
