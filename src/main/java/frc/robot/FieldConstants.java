@@ -19,17 +19,17 @@ import java.util.function.Function;
  */
 public final class FieldConstants {
   /** Field length (X) */
-  public static final Distance fieldLength = Inches.of(690.876);
+  public static final Distance kFieldLength = Inches.of(690.876);
 
   /** Field width (Y) */
-  public static final Distance fieldWidth = Inches.of(317);
+  public static final Distance kFieldWidth = Inches.of(317);
 
   /** Center of the starting line */
-  public static final Distance startingLineX = Inches.of(298.5);
+  public static final Distance kStartingLineX = Inches.of(298.5);
 
   public static final class Reef {
     public static final Translation2d center =
-        new Translation2d(Units.inchesToMeters(176.75), fieldWidth.in(Meters) / 2.0);
+        new Translation2d(Units.inchesToMeters(176.75), kFieldWidth.in(Meters) / 2.0);
 
     /**
      * Center points of each face starting at the face closest to the wall in counterclockwise
@@ -74,9 +74,9 @@ public final class FieldConstants {
 
     static {
       // spotless:off
-      cages[0] = new Translation2d(fieldLength.in(Meters) * 0.5, fieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(41.5));
-      cages[1] = new Translation2d(fieldLength.in(Meters) * 0.5, fieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(84.375));
-      cages[2] = new Translation2d(fieldLength.in(Meters) * 0.5, fieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(120.375));
+      cages[0] = new Translation2d(kFieldLength.in(Meters) * 0.5, kFieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(41.5));
+      cages[1] = new Translation2d(kFieldLength.in(Meters) * 0.5, kFieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(84.375));
+      cages[2] = new Translation2d(kFieldLength.in(Meters) * 0.5, kFieldWidth.in(Meters) * 0.5 + Units.inchesToMeters(120.375));
       // spotless:on
     }
   }

@@ -15,6 +15,7 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.Distance;
@@ -101,6 +102,9 @@ public class RobotContainer {
   @Logged(name = "Checklist/PivotEncoder", importance = Importance.CRITICAL)
   private boolean pivotEncoderValid = false;
 
+  @Logged(name = "State/HasOrientationLock", importance = Importance.INFO)
+  private final Trigger hasOrientationLock = new Trigger(drivetrain::hasOrientationLock);
+
   private static final Trigger disabled = new Trigger(() -> false);
   private static final Trigger isAutonomousMode = new Trigger(DriverStation::isAutonomousEnabled);
 
@@ -120,7 +124,6 @@ public class RobotContainer {
   private final Trigger brakeButton = controllerDriver.b();
   private final Trigger resetIntentButton = controllerDriver.x();
   private final Trigger floorIntakeButton = controllerDriver.leftTrigger();
-  private final Trigger stationIntakeButton = controllerDriver.leftBumper();
 
   private final Trigger hoverButton =
       Constants.Settings.sysIdBindings ? disabled : controllerDriver.povUp();
@@ -144,7 +147,7 @@ public class RobotContainer {
   private final Trigger algaeIntakeL3Button =
       Constants.Settings.sysIdBindings ? disabled : controllerDriver.povRight();
 
-  private final Trigger toggleAlgaeButton = controllerDriver.y();
+  private final Trigger algaeIntakeGroundButton = controllerDriver.y();
 
   private static final double kDriverTolerance = 0.05;
 
@@ -260,6 +263,7 @@ public class RobotContainer {
     scoreButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeScoreNet));
     scoreManualButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeEject));
 
+    algaeIntakeGroundButton.onTrue(state.setIntent(Intent.kAlgaeIntakeGround));
     algaeIntakeL2Button.onTrue(state.setIntent(Intent.kAlgaeIntakeL2));
     algaeIntakeL3Button.onTrue(state.setIntent(Intent.kAlgaeIntakeL3));
 
@@ -268,11 +272,6 @@ public class RobotContainer {
 
     hoverButton.onTrue(state.setIntent(Intent.kHover));
     hoverButton.onFalse(state.setIntent(Intent.kNone));
-
-    // manually toggle algae presence (until we have limit switch mechanism in place)
-    toggleAlgaeButton.onTrue(
-        new InstantCommand(
-            () -> superstructure.setAlgaePresence(!superstructure.hasAlgae.getAsBoolean())));
 
     // climbing
     climbReadyButton.onTrue(state.setIntent(Intent.kClimbReady));
@@ -305,14 +304,18 @@ public class RobotContainer {
         .and(superstructure.hasAlgae.negate())
         .onTrue(superstructure.setPosition(Position.kL3Algae));
 
+    state
+        .shouldIntakeAlgaeGround
+        .and(superstructure.hasAlgae.negate())
+        .onTrue(superstructure.setPosition(Position.kGroundAlgae));
+
     // hold algae while presence is set unless ejecting
     superstructure
         .hasAlgae
-        .and(state.shouldEjectAlgae.negate())
-        .and(superstructure.canEjectAlgae.negate().or(superstructure.canScoreAlgae.negate()))
+        .and(manipulator.isEjectingAlgae.negate())
         .whileTrue(manipulator.holdAlgae());
 
-    // eject algae
+    // eject/score algae (processor)
     state
         .shouldEjectAlgae
         .and(superstructure.hasAlgae)
@@ -322,19 +325,21 @@ public class RobotContainer {
         .shouldEjectAlgae
         .and(superstructure.hasAlgae)
         .and(superstructure.canEjectAlgae)
+        .and(scoreManualButton)
         .onTrue(ejectAlgaeSequence());
 
-    // score algae (net) -- commented out until new intake
-    // state
-    //     .shouldScoreAlgaeNet
-    //     .and(superstructure.hasAlgae)
-    //     .onTrue(superstructure.setPosition(Position.kNet));
+    // score algae (net)
+    state
+        .shouldScoreAlgaeNet
+        .and(superstructure.hasAlgae)
+        .onTrue(superstructure.setPosition(Position.kNet).andThen(setBargeOrientationLock()));
 
-    // state
-    //     .shouldScoreAlgaeNet
-    //     .and(superstructure.hasAlgae)
-    //     .and(superstructure.canScoreAlgae)
-    //     .onTrue(ejectAlgaeSequence());
+    state
+        .shouldScoreAlgaeNet
+        .and(superstructure.hasAlgae)
+        .and(superstructure.canScoreAlgae)
+        .and(scoreButton)
+        .onTrue(ejectAlgaeSequence());
 
     // intake coral from the floor
     state
@@ -346,18 +351,6 @@ public class RobotContainer {
         .shouldIntakeCoralFloor
         .and(superstructure.hasCoral.negate())
         .and(superstructure.canFloorIntake)
-        .whileTrue(manipulator.intakeCoral());
-
-    // intake coral from the station
-    state
-        .shouldIntakeCoralStation
-        .and(superstructure.hasCoral.negate())
-        .onTrue(superstructure.setPosition(Position.kStation));
-
-    state
-        .shouldIntakeCoralStation
-        .and(superstructure.hasCoral.negate())
-        .and(superstructure.canStationIntake)
         .whileTrue(manipulator.intakeCoral());
 
     // reindex coral after acquisition
@@ -513,6 +506,9 @@ public class RobotContainer {
             superstructure.setPosition(Position.kStowed),
             () -> elevator.isAbovePosition(52)));
 
+    // always clear orientation lock when do not have algae
+    hasOrientationLock.and(superstructure.hasAlgae.negate()).onTrue(clearOrientationLock());
+
     // LED
     state.atScoringPose.whileTrue(ledFeedback.signalReady());
     state.isAuto.whileTrue(ledVision.signalAssist());
@@ -555,6 +551,7 @@ public class RobotContainer {
         return LedFeedback.Type.kScoringAlgae;
       case kAlgaeIntakeL2:
       case kAlgaeIntakeL3:
+      case kAlgaeIntakeGround:
         return LedFeedback.Type.kIntakingAlgae;
       default:
         if (superstructure.hasCoral.getAsBoolean()) {
@@ -696,9 +693,12 @@ public class RobotContainer {
     return Commands.defer(
         () -> {
           final var modifier =
-              state.intent == Intent.kCoralScoreL4
-                  ? Constants.DriveConstants.kAutoL4SpeedModifier
-                  : Constants.DriveConstants.kAutoSpeedModifier;
+              (isAutonomousMode.getAsBoolean()
+                      ? Constants.DriveConstants.kAutonomousModeModifier
+                      : 1)
+                  * (state.intent == Intent.kCoralScoreL4
+                      ? Constants.DriveConstants.kAutoL4SpeedModifier
+                      : Constants.DriveConstants.kAutoSpeedModifier);
 
           final var maxVelocity = Constants.DriveConstants.maxSpeed.times(modifier);
           final var maxAcceleration = Constants.DriveConstants.maxAcceleration.times(modifier);
@@ -761,12 +761,7 @@ public class RobotContainer {
 
   /** Creates a command sequence to eject algae and reset intent and presence. */
   private Command ejectAlgaeSequence() {
-    return manipulator
-        .ejectAlgae()
-        .withTimeout(1)
-        .andThen(manipulator.stop())
-        .andThen(state.setIntent(Intent.kNone))
-        .andThen(new InstantCommand(() -> superstructure.setAlgaePresence(false)));
+    return manipulator.ejectAlgae().withTimeout(1).andThen(state.setIntent(Intent.kNone));
   }
 
   private void configureL4Sequence() {
@@ -775,7 +770,7 @@ public class RobotContainer {
     // go into retry mode
     state
         .shouldScoreCoralL4Final
-        .and(state.shouldScoreL4Eject.negate())
+        .and(state.shouldScoreL4Eject.negate().or(isAutonomousMode))
         .onTrue(
             superstructure
                 .maintainPosition(Position.kL4Scored)
@@ -794,7 +789,7 @@ public class RobotContainer {
     // score L4 by ejecting downwards (with new intake)
     state
         .shouldScoreCoralL4Final
-        .and(state.shouldScoreL4Eject)
+        .and(state.shouldScoreL4Eject.and(isAutonomousMode.negate()))
         .onTrue(
             Commands.sequence(
                 manipulator.ejectCoralReverse().until(superstructure.hasCoral.negate()),
@@ -829,6 +824,14 @@ public class RobotContainer {
                     .withTimeout(Milliseconds.of(400)),
                 Commands.waitTime(Milliseconds.of(200)),
                 state.setIntent(Intent.kCoralScoreL4Final)));
+  }
+
+  private Command setBargeOrientationLock() {
+    return Commands.runOnce(() -> drivetrain.setOrientationLock(Rotation2d.kZero));
+  }
+
+  private Command clearOrientationLock() {
+    return Commands.runOnce(drivetrain::clearOrientationLock);
   }
 
   public Command getAutonomousCommand() {

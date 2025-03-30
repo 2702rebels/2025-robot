@@ -1,5 +1,7 @@
 package frc.robot;
 
+import static edu.wpi.first.units.Units.Meters;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -46,5 +48,38 @@ public final class GameConstants {
       //         + String.format(" y=%.3f", reefScoringPoses[i].getY())
       //         + String.format(" r=%.0f", reefScoringPoses[i].getRotation().getDegrees()));
     }
+  }
+
+  /** Safety margin to use for safe field perimeter. */
+  public static final double kFieldPerimeterSafetyMargin =
+      bumperDimensions / 2 + Units.inchesToMeters(12);
+
+  /** Determines if the pose is within safe field perimeter to be used for auto. */
+  public static boolean withinAutoFieldPerimeter(Pose2d pose) {
+    // here logic is defined for blue origin side, since we don't want to cross the center line,
+    // flip the supplied pose if the robot is on the red alliance side
+    final var adjustedPose = FieldConstants.fieldPose.apply(pose);
+
+    final var x = adjustedPose.getX();
+    final var y = adjustedPose.getY();
+    final var maxX = FieldConstants.kStartingLineX.in(Meters);
+    final var maxY = FieldConstants.kFieldWidth.in(Meters);
+
+    if (x < kFieldPerimeterSafetyMargin
+        || x > maxX - kFieldPerimeterSafetyMargin
+        || y < kFieldPerimeterSafetyMargin
+        || y > maxY - kFieldPerimeterSafetyMargin) {
+      return false;
+    }
+
+    // account for loading station corners
+    // Bottom: (0, 1.2m), (1.7m, 0)
+    // LineEq: 0.7x + y - 1.2 < 0
+    if (0.7 * x + y - 1.2 < kFieldPerimeterSafetyMargin
+        || -0.7 * x + y + 1.2 - maxY > -kFieldPerimeterSafetyMargin) {
+      return false;
+    }
+
+    return false;
   }
 }

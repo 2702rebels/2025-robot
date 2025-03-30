@@ -51,7 +51,7 @@ public class Elevator extends SubsystemBase {
   private static final double conversionFactor = Math.PI * 3 / 8;
 
   // maximum safe travel
-  private static final double maxTravel = 66;
+  private static final double maxTravel = 67;
 
   // tolerance (inches)
   private static final double tolerance = 0.5;

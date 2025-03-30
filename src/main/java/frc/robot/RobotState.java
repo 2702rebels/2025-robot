@@ -184,6 +184,9 @@ public class RobotState {
     /** Intake algae (L3 high) */
     kAlgaeIntakeL3,
 
+    /** Intake algae ground */
+    kAlgaeIntakeGround,
+
     /** Score algae into the net */
     kAlgaeScoreNet,
 
@@ -321,8 +324,11 @@ public class RobotState {
   @Logged(name = "ShouldIntakeAlgaeL3", importance = Importance.INFO)
   public final Trigger shouldIntakeAlgaeL3 = new Trigger(() -> intent == Intent.kAlgaeIntakeL3);
 
+  @Logged(name = "ShouldIntakeAlgaeGround", importance = Importance.INFO)
+  public final Trigger shouldIntakeAlgaeGround = new Trigger(() -> intent == Intent.kAlgaeIntakeGround);
+
   @Logged(name = "ShouldIntakeAlgae", importance = Importance.INFO)
-  public final Trigger shouldIntakeAlgae = shouldIntakeAlgaeL2.or(shouldIntakeAlgaeL3);
+  public final Trigger shouldIntakeAlgae = shouldIntakeAlgaeL2.or(shouldIntakeAlgaeL3).or(shouldIntakeAlgaeGround);
 
   @Logged(name = "ShouldEjectAlgae", importance = Importance.INFO)
   public final Trigger shouldEjectAlgae = new Trigger(() -> intent == Intent.kAlgaeEject);

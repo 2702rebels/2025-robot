@@ -24,17 +24,17 @@ public final class Superstructure extends SubsystemBase {
   // DO NOT USE THESE VALUES DIRECTLY IN PERIODIC CODE,
   // USE THEM TO INITIALIZE TUNABLE VALUES AND CONTROLLERS
   private static final double __kStowedHeight = 0;
+  private static final double __kStowedAlgaeHeight = 20;
   private static final double __kFloorHeight = 0;
-  private static final double __kStationHeight = 26.5;
   private static final double __kL1Height = 16;
   private static final double __kL2Height = 34.5;
   private static final double __kL3Height = 50.5;
   private static final double __kL4Height = 64;
   private static final double __kL4SHeight = 46;
   private static final double __kL4RHeight = 63;
-  private static final double __kL2AlgaeHeight = 20;
-  private static final double __kL3AlgaeHeight = 36;
-  private static final double __kNetHeight = 66;
+  private static final double __kL2AlgaeHeight = 32;
+  private static final double __kL3AlgaeHeight = 48;
+  private static final double __kNetHeight = 67;
   private static final double __kHoverHeight = 12;
 
   // angles are in degrees [!]
@@ -42,25 +42,24 @@ public final class Superstructure extends SubsystemBase {
   private static final double __kTransitionAngle = 80;
   private static final double __kStowedAlgaeAngle = 70;
   private static final double __kEjectAlgaeAngle = 0;
-  private static final double __kTransitionAlgaeAngle = 30;
+  private static final double __kTransitionAlgaeAngle = 70;
   private static final double __kFloorAngle = -1;
-  private static final double __kStationAngle = 41;
   private static final double __kL1Angle = 25;
   private static final double __kL2Angle = -6;
   private static final double __kL3Angle = -6;
   private static final double __kL4Angle = 80;
   private static final double __kL4SAngle = 80;
-  private static final double __kL2AlgaeAngle = 30;
-  private static final double __kL3AlgaeAngle = 30;
-  private static final double __kNetAngle = 45;
-  private static final double __kClimbAngle = 10;
+  private static final double __kL2AlgaeAngle = -5;
+  private static final double __kL3AlgaeAngle = -5;
+  private static final double __kNetAngle = 70;
+  private static final double __kClimbAngle = 20;
 
   private static final double __kBranchOffset = 32;
 
   private static final double kSafeEjectAngle = 50;
   private static final double kAngleTolerance = 10; // for elevator protection
-  private static final double kElevatorToleranceGround = 2;
-  private static final double kElevatorToleranceNet = 2;
+  private static final double kElevatorTolerance = 2;
+  private static final double kElevatorToleranceNet = 4;
   private static final double kBranchDownwardDelta = 2;
 
   @Logged(name = "Position", importance = Importance.INFO)
@@ -77,6 +76,10 @@ public final class Superstructure extends SubsystemBase {
   // delay on the elevator stall detection (rising edge)
   private static final double kElevatorStallDelaySeconds = 0.1;
 
+  // debounce algae presence to distinguish between initial
+  // amp surge and stall situations
+  private static final double kAlgaeIntakeDelaySeconds = 0.5;
+
   // profile captured when the position change was commenced
   private Optional<Double> heightAtLastPosition = Optional.empty();
   private Optional<Double> angleAtLastPosition = Optional.empty();
@@ -91,10 +94,6 @@ public final class Superstructure extends SubsystemBase {
 
   // allows overriding pivot angle
   private Optional<Double> overridePivotAngle = Optional.empty();
-
-  // since we don't currently have a sensor (limit switch) to detect the presence
-  // of the algae, we instead rely on setting this state manually
-  private boolean hasAlgaeState;
 
   // allows delaying deployment of the superstructure during driving
   // to the auto scoring position
@@ -113,7 +112,8 @@ public final class Superstructure extends SubsystemBase {
     canScoreL2 = new Trigger(() -> elevator.isAtPosition(kL2Height.get()) && pivot.isAtAngle(kL2Angle.get()));
     canScoreL3 = new Trigger(() -> elevator.isAtPosition(kL3Height.get()) && pivot.isAtAngle(kL3Angle.get()));
     canScoreL4 = new Trigger(() -> elevator.isAtPosition(kL4Height.get()) && pivot.isAtAngle(kL4Angle.get()));
-    canScoreAlgae = new Trigger(() -> elevator.isAtPosition(kNetHeight.get()) && pivot.isAtAngle(kNetAngle.get()));
+    canScoreAlgae = new Trigger(() -> elevator.isAtPosition(kNetHeight.get(), 1) && pivot.isAtAngle(kNetAngle.get(), 5));
+    canEjectAlgae = new Trigger(() -> elevator.isAtPosition(kFloorHeight.get(), 1) && pivot.isAtAngle(kEjectAlgaeAngle.get(), 5));
     // spotless:on
 
     // use higher tolerance on the intake, since the elevator/pivot is moved up
@@ -123,18 +123,6 @@ public final class Superstructure extends SubsystemBase {
             () ->
                 elevator.isAtPosition(kFloorHeight.get(), 1)
                     && pivot.isAtAngle(kFloorAngle.get(), 10));
-
-    canStationIntake =
-        new Trigger(
-            () ->
-                elevator.isAtPosition(kStationHeight.get(), 1)
-                    && pivot.isAtAngle(kStationAngle.get(), 10));
-
-    canEjectAlgae =
-        new Trigger(
-            () ->
-                elevator.isAtPosition(kFloorHeight.get(), 1)
-                    && pivot.isAtAngle(kEjectAlgaeAngle.get(), 5));
 
     canIntakeAlgae =
         new Trigger(
@@ -146,6 +134,9 @@ public final class Superstructure extends SubsystemBase {
                 case kL3Algae:
                   return elevator.isAtPosition(kL3AlgaeHeight.get())
                       && pivot.isAtAngle(kL3AlgaeAngle.get());
+                case kGroundAlgae:
+                  return elevator.isAtPosition(kFloorHeight.get(), 1)
+                      && pivot.isAtAngle(kFloorAngle.get(), 10);
                 default:
                   return false;
               }
@@ -153,7 +144,7 @@ public final class Superstructure extends SubsystemBase {
 
     // spotless:off
     hasCoral = new Trigger(coralSensor::isPressed).debounce(kHasCoralDelaySeconds, DebounceType.kFalling).debounce(kCoralIntakeDelaySeconds, DebounceType.kRising);
-    hasAlgae = new Trigger(() -> hasAlgaeState);
+    hasAlgae = new Trigger(manipulator::hasAlgae).debounce(kAlgaeIntakeDelaySeconds, DebounceType.kBoth);
     isElevatorStalled = new Trigger(elevator::isStalled).debounce(kElevatorStallDelaySeconds, DebounceType.kRising);
     // spotless:on
   }
@@ -162,7 +153,6 @@ public final class Superstructure extends SubsystemBase {
   public static enum Position {
     kStowed,
     kFloor,
-    kStation,
     kL1,
     kL2,
     kL3,
@@ -171,6 +161,7 @@ public final class Superstructure extends SubsystemBase {
     kL4Scored,
     kL2Algae,
     kL3Algae,
+    kGroundAlgae,
     kEjectAlgae,
     kNet,
     kHover, // special position to allow trapped game pieces to escape
@@ -205,10 +196,6 @@ public final class Superstructure extends SubsystemBase {
   /** Trigger for superstructure ready for floor intake */
   @Logged(name = "CanFloorIntake", importance = Importance.INFO)
   public final Trigger canFloorIntake;
-
-  /** Trigger for superstructure ready for station intake */
-  @Logged(name = "CanStationIntake", importance = Importance.INFO)
-  public final Trigger canStationIntake;
 
   /** Trigger for superstructure ready for scoring at L1 */
   @Logged(name = "CanScoreL1", importance = Importance.INFO)
@@ -310,7 +297,7 @@ public final class Superstructure extends SubsystemBase {
 
   /** Returns effective transition angle that depends on type of game piece being controlled. */
   private double getTransitionAngle() {
-    return hasAlgaeState ? kTransitionAlgaeAngle.get() : kTransitionAngle.get();
+    return hasAlgae.getAsBoolean() ? kTransitionAlgaeAngle.get() : kTransitionAngle.get();
   }
 
   @Override
@@ -333,7 +320,7 @@ public final class Superstructure extends SubsystemBase {
     // safety: do not move elevator if the pivot is beyond critical (transition) angle
     final var pivotAngle = pivot.getAngle();
     final var elevatorSetpoint =
-        pivotAngle <= getTransitionAngle() + kAngleTolerance
+        pivotAngle <= kTransitionAngle.get() + kAngleTolerance
             ? setpoint.getFirst()
             : elevator.getPosition();
 
@@ -342,21 +329,19 @@ public final class Superstructure extends SubsystemBase {
         overrideElevatorHeight.isPresent() ? overrideElevatorHeight.get() : elevatorSetpoint);
   }
 
-  /* Manually sets algae presence indicator. */
-  public void setAlgaePresence(boolean value) {
-    hasAlgaeState = value;
-  }
-
   /** Returns the next setpoint for elevator and pivot. */
   private Pair<Double, Double> getSetpoint() {
     final var height = elevator.getPosition();
     final var profile = positionProfiles.get(position);
 
-    final var targetHeight = profile.getFirst();
+    // override stowed angle/height if we think we have an algae
+    final var targetHeight =
+        position == Position.kStowed && hasAlgae.getAsBoolean()
+            ? kStowedAlgaeHeight.get()
+            : profile.getFirst();
 
-    // override stowed angle if we think we have an algae
     final var targetAngle =
-        position == Position.kStowed && hasAlgaeState
+        position == Position.kStowed && hasAlgae.getAsBoolean()
             ? kStowedAlgaeAngle.get()
             : profile.getSecond();
 
@@ -372,7 +357,7 @@ public final class Superstructure extends SubsystemBase {
     // safety: do not allow pivot to go beyond transition angle except at stow position,
     // near zero, or at net position, near top
     final var pivotProtected =
-        height > kElevatorToleranceGround && height < kNetHeight.get() - kElevatorToleranceNet;
+        height > kElevatorTolerance && height < kNetHeight.get() - kElevatorToleranceNet;
 
     var actualAngle =
         MathUtil.isNear(targetHeight, height, kBranchOffset.get())
@@ -381,7 +366,7 @@ public final class Superstructure extends SubsystemBase {
 
     // on downward motion do not stow the pivot right away since it tends to hit
     // the coral above it as it retracts, instead wait until elevator lowers somewhat
-    if (targetHeight < height
+    if (targetHeight < height - kElevatorTolerance
         && heightAtLastPosition.isPresent()
         && angleAtLastPosition.isPresent()) {
       final var _heightAtLastPosition = heightAtLastPosition.get();
@@ -404,7 +389,6 @@ public final class Superstructure extends SubsystemBase {
     // spotless:off
     positionProfiles.put(Position.kStowed, Pair.of(kStowedHeight.get(), kStowedAngle.get()));
     positionProfiles.put(Position.kFloor, Pair.of(kFloorHeight.get(), kFloorAngle.get()));
-    positionProfiles.put(Position.kStation, Pair.of(kStationHeight.get(), kStationAngle.get()));
     positionProfiles.put(Position.kL1, Pair.of(kL1Height.get(), kL1Angle.get()));
     positionProfiles.put(Position.kL2, Pair.of(kL2Height.get(), kL2Angle.get()));
     positionProfiles.put(Position.kL3, Pair.of(kL3Height.get(), kL3Angle.get()));
@@ -413,6 +397,7 @@ public final class Superstructure extends SubsystemBase {
     positionProfiles.put(Position.kL4Retry, Pair.of(kL4RHeight.get(), kL4SAngle.get()));
     positionProfiles.put(Position.kL2Algae, Pair.of(kL2AlgaeHeight.get(), kL2AlgaeAngle.get()));
     positionProfiles.put(Position.kL3Algae, Pair.of(kL3AlgaeHeight.get(), kL3AlgaeAngle.get()));
+    positionProfiles.put(Position.kGroundAlgae, Pair.of(kFloorHeight.get(), kFloorAngle.get()));
     positionProfiles.put(Position.kNet, Pair.of(kNetHeight.get(), kNetAngle.get()));
     positionProfiles.put(Position.kEjectAlgae, Pair.of(kFloorHeight.get(), kEjectAlgaeAngle.get()));
     positionProfiles.put(Position.kHover, Pair.of(kHoverHeight.get(), kTransitionAngle.get()));
@@ -435,8 +420,6 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kStowedHeight = profileValue("Stowed/Height", __kStowedHeight);
   private static Tunable.DoubleValue kFloorAngle = profileValue("Floor/Angle", __kFloorAngle);
   private static Tunable.DoubleValue kFloorHeight = profileValue("Floor/Height", __kFloorHeight);
-  private static Tunable.DoubleValue kStationAngle = profileValue("Station/Angle", __kStationAngle);
-  private static Tunable.DoubleValue kStationHeight = profileValue("Station/Height", __kStationHeight);
   private static Tunable.DoubleValue kL1Angle = profileValue("L1/Angle", __kL1Angle);
   private static Tunable.DoubleValue kL1Height = profileValue("L1/Height", __kL1Height);
   private static Tunable.DoubleValue kL2Angle = profileValue("L2/Angle", __kL2Angle);
@@ -458,6 +441,7 @@ public final class Superstructure extends SubsystemBase {
   private static Tunable.DoubleValue kTransitionAngle = profileValue("TransitionAngle", __kTransitionAngle);
   private static Tunable.DoubleValue kTransitionAlgaeAngle = profileValue("TransitionAlgaeAngle", __kTransitionAlgaeAngle);
   private static Tunable.DoubleValue kStowedAlgaeAngle = profileValue("StowedAlgaeAngle", __kStowedAlgaeAngle);
+  private static Tunable.DoubleValue kStowedAlgaeHeight = profileValue("StowedAlgaeHeight", __kStowedAlgaeHeight);
   private static Tunable.DoubleValue kEjectAlgaeAngle = profileValue("EjectAlgaeAngle", __kEjectAlgaeAngle);
   private static Tunable.DoubleValue kClimbAngle = profileValue("ClimbAngle", __kClimbAngle);
   private static Tunable.DoubleValue kBranchOffset = profileValue("BranchOffset", __kBranchOffset);

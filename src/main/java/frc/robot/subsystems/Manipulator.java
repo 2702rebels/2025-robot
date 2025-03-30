@@ -8,10 +8,12 @@ import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.FunctionalCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.LoggedSparkMax;
 import frc.robot.lib.Tunable;
 
@@ -22,18 +24,20 @@ import frc.robot.lib.Tunable;
 public final class Manipulator extends SubsystemBase {
   // MAKE SURE TO UPDATE THESE VALUES AFTER TUNING
   private static final double __kCoralIntakeVelocity = 0.85;
-  private static final double __kCoralIntakeVelocityGuide = 0.75;
+  private static final double __kCoralIntakeVelocityGuide = 1;
   private static final double __kCoralEjectVelocity = 0.4;
   private static final double __kCoralReverseTime = 0.06;
   private static final double __kCoralStallSpeedUB = 800; // RPMs
   private static final double __kCoralStallSpeedLB = 400; // RPMs
 
-  private static final double __kAlgaeIntakeVelocity = 0.5;
-  private static final double __kAlgaeEjectVelocity = 0.5;
-  private static final double __kAlgaeHoldVelocity = 0.1;
+  private static final double __kAlgaeIntakeVelocity = 0.8;
+  private static final double __kAlgaeEjectVelocity = 0.9;
+  private static final double __kAlgaeHoldVelocity = 0.8;
 
   private static final double __kCoralP = 3.5;
   private static final double __kCoralReindexPosition = 0.15;
+
+  private static final int kGuideMotorStallCurrent = 30;
 
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;
@@ -41,6 +45,8 @@ public final class Manipulator extends SubsystemBase {
   private double motorGuideSpeed = 0;
 
   private boolean intakingCoral = false;
+  private boolean ejectingAlgae = false;
+
   private boolean reversedGuide = false;
   private boolean stallDetectionActive = false;
 
@@ -61,6 +67,16 @@ public final class Manipulator extends SubsystemBase {
     return false;
   }
 
+  @Logged(name = "IsEjectingAlgae", importance = Importance.INFO)
+  public Trigger isEjectingAlgae = new Trigger(() -> ejectingAlgae);
+
+  /** Detects algae presence by checking for stall on the guide motor. */
+  public boolean hasAlgae() {
+    return !intakingCoral
+        && motorGuide.getCurrentAmps() > kGuideMotorStallCurrent * 0.8
+        && MathUtil.isNear(0, motorGuide.getVelocityRPM(), 100);
+  }
+
   @Logged(name = "Guide", importance = Importance.INFO)
   private final LoggedSparkMax motorGuide;
 
@@ -73,7 +89,7 @@ public final class Manipulator extends SubsystemBase {
             guideCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(30)
+                  .smartCurrentLimit(kGuideMotorStallCurrent)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals
@@ -118,6 +134,7 @@ public final class Manipulator extends SubsystemBase {
 
   private void stopMotors() {
     intakingCoral = false;
+    ejectingAlgae = false;
     reversedGuide = false;
     stallDetectionActive = false;
     reversedAt = -1;
@@ -219,6 +236,7 @@ public final class Manipulator extends SubsystemBase {
   public Command ejectAlgae() {
     return runEnd(
             () -> {
+              ejectingAlgae = true;
               motorCoral.stopMotor();
               motorGuide.set(-kAlgaeEjectVelocity.get());
             },

@@ -88,6 +88,17 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
           .withDriveRequestType(DriveRequestType.Velocity);
 
+  // swerve request for teleop driving with orientation lock
+  private final SwerveRequest.FieldCentricFacingAngle driveFacingAngle =
+      new SwerveRequest.FieldCentricFacingAngle()
+          .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
+          .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
+          .withDriveRequestType(DriveRequestType.Velocity)
+          .withHeadingPID(
+              DriveConstants.PathFollowing.rotationKp,
+              DriveConstants.PathFollowing.rotationKi,
+              DriveConstants.PathFollowing.rotationKd);
+
   // swerve request for pointing wheels forward
   private final SwerveRequest.PointWheelsAt wheelsForward =
       new SwerveRequest.PointWheelsAt()
@@ -201,6 +212,9 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
   // SysId routine to use
   private SysIdRoutine sysIdRoutineToApply = sysIdRoutineTranslationVoltage;
+
+  // angle for orientation lock
+  private Optional<Rotation2d> orientationLock = Optional.empty();
 
   private void init() {
     pathThetaController.enableContinuousInput(-Math.PI, Math.PI);
@@ -504,12 +518,20 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
   }
 
   /**
-   * Drives with the specified input velocities and omega.
+   * Drives with the specified input velocities and omega. Honors orientation lock.
    *
    * <p>Use this version for teleop control.
    */
   public void driveAt(double vx, double vy, double omega) {
-    setControl(drive.withVelocityX(vx).withVelocityY(vy).withRotationalRate(omega));
+    final var request =
+        orientationLock.isPresent()
+            ? driveFacingAngle
+                .withVelocityX(vx)
+                .withVelocityY(vy)
+                .withTargetDirection(orientationLock.get())
+            : drive.withVelocityX(vx).withVelocityY(vy).withRotationalRate(omega);
+
+    setControl(request);
   }
 
   /** Stops the robot by setting speeds to zero. */
@@ -526,6 +548,25 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
     return d <= Constants.DriveConstants.PoseChasing.kTranslationTolerance
         && r <= Constants.DriveConstants.PoseChasing.kRotationTolerance;
+  }
+
+  /**
+   * Sets the orientation lock.
+   *
+   * @param value Operator-perspective orientation to maintain.
+   */
+  public void setOrientationLock(Rotation2d value) {
+    orientationLock = Optional.of(value);
+  }
+
+  /** Removes the orientation lock. */
+  public void clearOrientationLock() {
+    orientationLock = Optional.empty();
+  }
+
+  /** Determines whether orientation lock is enabled. */
+  public boolean hasOrientationLock() {
+    return orientationLock.isPresent();
   }
 
   /**
