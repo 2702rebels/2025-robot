@@ -140,6 +140,7 @@ public class RobotContainer {
 
   private final Trigger scoreButton = controllerDriver.rightTrigger();
   private final Trigger scoreManualButton = controllerDriver.rightBumper();
+  private final Trigger scoreAlgaeNetButton = controllerDriver.leftBumper();
 
   // algae manipulation
   private final Trigger algaeIntakeL2Button =
@@ -260,7 +261,7 @@ public class RobotContainer {
     scoreManualButton.and(superstructure.hasCoral).onTrue(state.setIntent(Intent.kCoralScoreL1));
 
     // algae scoring
-    scoreButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeScoreNet));
+    scoreAlgaeNetButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeScoreNet));
     scoreManualButton.and(superstructure.hasAlgae).onTrue(state.setIntent(Intent.kAlgaeEject));
 
     algaeIntakeGroundButton.onTrue(state.setIntent(Intent.kAlgaeIntakeGround));
@@ -338,7 +339,7 @@ public class RobotContainer {
         .shouldScoreAlgaeNet
         .and(superstructure.hasAlgae)
         .and(superstructure.canScoreAlgae)
-        .and(scoreButton)
+        .and(scoreAlgaeNetButton)
         .onTrue(ejectAlgaeSequence());
 
     // intake coral from the floor
