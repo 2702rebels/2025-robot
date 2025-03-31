@@ -39,7 +39,7 @@ public final class Superstructure extends SubsystemBase {
 
   // angles are in degrees [!]
   private static final double __kStowedAngle = 130;
-  private static final double __kTransitionAngle = 80;
+  private static final double __kTransitionAngle = 75;
   private static final double __kStowedAlgaeAngle = 70;
   private static final double __kEjectAlgaeAngle = 0;
   private static final double __kTransitionAlgaeAngle = 70;

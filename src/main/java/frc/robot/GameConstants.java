@@ -13,7 +13,7 @@ public final class GameConstants {
   public static final double kBumperDimensions = Units.inchesToMeters(34);
 
   /** X coordinate (meters) of the robot center when at climb ready position. */
-  public static final double kClimbPositionX = 8.2;
+  public static final double kClimbPositionX = 8.285;
 
   /**
    * Robot poses for scoring at each reef branch starting at the face closest to the fall in

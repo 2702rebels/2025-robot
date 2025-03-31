@@ -446,7 +446,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral.negate())
         .onTrue(
             // backup a little bit to avoid hitting corals on the way down
-            driveForward(Inches.of(-2)).andThen(state.setIntent(Intent.kNone)));
+            driveForward(Inches.of(-5)).andThen(state.setIntent(Intent.kNone)));
 
     // hover
     state.shouldHover.onTrue(superstructure.setPosition(Position.kHover));
@@ -719,21 +719,23 @@ public class RobotContainer {
 
             superstructure.setDelayed(true);
             return Commands.sequence(
-                new DriveToPose(
+                    new DriveToPose(
+                            drivetrain,
+                            this::getRepositionedScoringPose,
+                            state::getRobotPose,
+                            maxVelocity,
+                            maxAcceleration)
+                        .withTimeout(3),
+                    Commands.runOnce(() -> superstructure.setDelayed(false)),
+                    Commands.waitTime(
+                        superstructureTime != null ? superstructureTime : Seconds.zero()),
+                    new DriveToPose(
                         drivetrain,
-                        this::getRepositionedScoringPose,
+                        state::getScoringPose,
                         state::getRobotPose,
                         maxVelocity,
-                        maxAcceleration)
-                    .withTimeout(3),
-                Commands.runOnce(() -> superstructure.setDelayed(false)),
-                Commands.waitTime(superstructureTime != null ? superstructureTime : Seconds.zero()),
-                new DriveToPose(
-                    drivetrain,
-                    state::getScoringPose,
-                    state::getRobotPose,
-                    maxVelocity,
-                    maxAcceleration));
+                        maxAcceleration))
+                .finallyDo(() -> superstructure.setDelayed(false));
           }
 
           final var pair =
