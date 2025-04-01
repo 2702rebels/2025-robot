@@ -845,6 +845,11 @@ public class RobotState {
     autoScoringStep = 0;
   }
 
+  /** Runs logic at the beginning of the teleop cycle. */
+  public void enterTeleop() {
+    autoScoringStep = 0;
+  }
+
   /** Returns observed chassis speeds at the specified timestamp. */
   public Optional<ChassisSpeeds> getSpeedsAt(long timestamp) {
     return chassisSpeeds.findAt(timestamp);

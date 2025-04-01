@@ -185,7 +185,7 @@ public class RobotContainer {
     state.setDetectedObjectSupplier(objectDetector::getDetectedObject);
 
     autoFactory = drivetrain.createAutoFactory();
-    autoRoutines = new AutoRoutines(autoFactory, superstructure);
+    autoRoutines = new AutoRoutines(autoFactory, drivetrain, superstructure, manipulator);
 
     autoChooser.addRoutine(
         "DriveForward", () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24))));
@@ -197,8 +197,8 @@ public class RobotContainer {
     autoChooser.addRoutine("Score L4 (F)", () -> autoRoutines.scoreL4x('F'));
     autoChooser.addRoutine("Score L4 (E)", () -> autoRoutines.scoreL4x('E'));
 
-    // DO NOT USE: algae get stuck in the robot when trying to pick up pre-deployed coral
-    // autoChooser.addRoutine("Score L4 (I,L)", autoRoutines::scoreL4IL);
+    autoChooser.addRoutine("Score L4 (I,L) Left Side", autoRoutines::scoreL4IL);
+    autoChooser.addRoutine("Score L4 (F,C) Right Side", autoRoutines::scoreL4FC);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 

@@ -108,7 +108,7 @@ public final class GameConstants {
       return false;
     }
 
-    return false;
+    return true;
   }
 
   /** Field quadrant. Left or right based on the alliance perspective. */

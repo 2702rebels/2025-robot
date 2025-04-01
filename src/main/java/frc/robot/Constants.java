@@ -118,7 +118,7 @@ public final class Constants {
     public static final double kAutoL4SpeedModifier = 0.4;
 
     /** Additional speed modifier for actual autonomous mode */
-    public static final double kAutonomousModeModifier = 0.8;
+    public static final double kAutonomousModeModifier = 1.2;
 
     /** PID configuration to pose chasing controllers */
     public static final class PoseChasing {
