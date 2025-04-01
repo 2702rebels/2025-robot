@@ -2,15 +2,12 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
-import com.pathplanner.lib.config.PIDConstants;
-import com.pathplanner.lib.config.RobotConfig;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearAcceleration;
 import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.units.measure.Time;
-import edu.wpi.first.wpilibj.DriverStation;
 import frc.robot.generated.TunerConstants;
 
 public final class Constants {
@@ -140,14 +137,6 @@ public final class Constants {
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;
 
-      /** PP PID constants for translation controllers */
-      public static final PIDConstants kTranslationPID =
-          new PIDConstants(translationKp, translationKi, translationKd);
-
-      /** PP PID constants for rotation controllers */
-      public static final PIDConstants kRotationPID =
-          new PIDConstants(rotationKp, rotationKi, rotationKd);
-
       /** Translation tolerance */
       public static final double kTranslationTolerance = Units.inchesToMeters(1);
 
@@ -175,30 +164,11 @@ public final class Constants {
       /** kD used for the rotation PID drive controllers */
       public static final double rotationKd = 0;
 
-      /** PP PID constants for translation controllers */
-      public static final PIDConstants kTranslationPID =
-          new PIDConstants(translationKp, translationKi, translationKd);
-
-      /** PP PID constants for rotation controllers */
-      public static final PIDConstants kRotationPID =
-          new PIDConstants(rotationKp, rotationKi, rotationKd);
-
       /** Translation tolerance */
       public static final double kTranslationTolerance = Units.inchesToMeters(1);
 
       /** Rotation tolerance */
       public static final double kRotationTolerance = Units.degreesToRadians(2);
-    }
-
-    /** PP robot configuration */
-    public static RobotConfig robotConfig = null;
-
-    static {
-      try {
-        robotConfig = RobotConfig.fromGUISettings();
-      } catch (Exception e) {
-        DriverStation.reportError("PPConfigLoader: " + e.getMessage(), e.getStackTrace());
-      }
     }
   }
 
