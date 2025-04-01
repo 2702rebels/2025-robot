@@ -194,7 +194,7 @@ public class DriveToPose extends Command {
 
     final var driveVelocity = new Translation2d(driveVelocityScalar, 0.0).rotateBy(angle);
 
-    drive.driveAt(
+    drive.driveAtRobotRelative(
         ChassisSpeeds.fromFieldRelativeSpeeds(
             driveVelocity.getX(),
             driveVelocity.getY(),

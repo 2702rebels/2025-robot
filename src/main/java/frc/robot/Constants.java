@@ -115,7 +115,7 @@ public final class Constants {
     public static final double kAutoSpeedModifier = 0.5;
 
     /** Speed modifier for auto modes (L4 scoring). */
-    public static final double kAutoL4SpeedModifier = 0.5;
+    public static final double kAutoL4SpeedModifier = 0.4;
 
     /** Additional speed modifier for actual autonomous mode */
     public static final double kAutonomousModeModifier = 0.8;

@@ -333,7 +333,9 @@ public class RobotContainer {
     state
         .shouldScoreAlgaeNet
         .and(superstructure.hasAlgae)
-        .onTrue(superstructure.setPosition(Position.kNet).andThen(setBargeOrientationLock()));
+        .onTrue(superstructure.setPosition(Position.kNet).andThen(setBargeOrientationLock()))
+        .and(() -> GameConstants.isAtNetScoringPosition(state.getRobotPose()))
+        .whileTrue(ledFeedback.signalAttainment());
 
     state
         .shouldScoreAlgaeNet
@@ -496,19 +498,21 @@ public class RobotContainer {
     state.coralReady.onTrue(superstructure.setPosition(Position.kReady));
 
     // [default behavior] stow when no intent is specified
+    state.idle.whileTrue(superstructure.setPosition(Position.kStowed));
+
     //
     // special handling for situations when elevator is above 54", e.g.
     // when we are stuck on the reef while trying to score L4 and are trying
     // to abort -- first go up, then back up, before stowing the pivot
-    state.idle.whileTrue(
-        Commands.either(
-            Commands.sequence(
-                superstructure.setHeightOverride(60),
-                driveForward(Inches.of(-10)),
-                superstructure.resetHeightOverride(),
-                superstructure.setPosition(Position.kStowed)),
-            superstructure.setPosition(Position.kStowed),
-            () -> elevator.isAbovePosition(52)));
+    // state.idle.whileTrue(
+    //     Commands.either(
+    //         Commands.sequence(
+    //             superstructure.setHeightOverride(60),
+    //             driveForward(Inches.of(-10)),
+    //             superstructure.resetHeightOverride(),
+    //             superstructure.setPosition(Position.kStowed)),
+    //         superstructure.setPosition(Position.kStowed),
+    //         () -> elevator.isAbovePosition(52)));
 
     // always clear orientation lock when do not have algae
     hasOrientationLock.and(superstructure.hasAlgae.negate()).onTrue(clearOrientationLock());
@@ -769,7 +773,7 @@ public class RobotContainer {
 
   /** Creates a command sequence to eject algae and reset intent and presence. */
   private Command ejectAlgaeSequence() {
-    return manipulator.ejectAlgae().withTimeout(1).andThen(state.setIntent(Intent.kNone));
+    return manipulator.ejectAlgae().withTimeout(3).andThen(state.setIntent(Intent.kNone));
   }
 
   private void configureL4Sequence() {
@@ -835,7 +839,7 @@ public class RobotContainer {
   }
 
   private Command setBargeOrientationLock() {
-    return Commands.runOnce(() -> drivetrain.setOrientationLock(Rotation2d.kZero));
+    return Commands.runOnce(() -> drivetrain.setOrientationLock(Rotation2d.k180deg));
   }
 
   private Command clearOrientationLock() {

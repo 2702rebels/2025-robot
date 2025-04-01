@@ -15,34 +15,46 @@ public final class GameConstants {
   /** X coordinate (meters) of the robot center when at climb ready position. */
   public static final double kClimbPositionX = 8.285;
 
+  /** X coordinate (meters) of the robot center when at net scoring ready position. */
+  public static final double kNetScoringPositionX = 8.3;
+
   /**
    * Robot poses for scoring at each reef branch starting at the face closest to the fall in
    * counterclockwise order. Index corresponds to the A, B, ..., K, L references in the game manual.
    */
-  public static final Pose2d[] reefScoringPoses = new Pose2d[12];
+  public static final Pose2d[] reefScoringPosesL2 = new Pose2d[12];
+
+  /** Robot poses for scoring at L3 level (different gap). */
+  public static final Pose2d[] reefScoringPosesL3 = new Pose2d[12];
 
   /** Robot poses for scoring at L4 level (different gap). */
   public static final Pose2d[] reefScoringPosesL4 = new Pose2d[12];
 
+  private static final double kBranchShift = Units.inchesToMeters(13) / 2;
+
+  private static Translation2d getScoringOffset(Rotation2d rotation, int index, double gap) {
+    return new Translation2d(kBumperDimensions / 2 + gap, kBranchShift * (index % 2 == 0 ? -1 : 1))
+        .rotateBy(rotation);
+  }
+
   static {
     final var rotation180 = Rotation2d.fromDegrees(180);
-    final var branchShift = Units.inchesToMeters(13) / 2;
-    final var gap = Units.inchesToMeters(8);
+    final var gapL2 = Units.inchesToMeters(10);
+    final var gapL3 = Units.inchesToMeters(8);
     final var gapL4 = Units.inchesToMeters(1);
 
     for (int i = 0; i < 12; ++i) {
       final var face = FieldConstants.Reef.faces[i / 2];
-      final var offset =
-          new Translation2d(kBumperDimensions / 2 + gap, branchShift * (i % 2 == 0 ? -1 : 1))
-              .rotateBy(face.getRotation());
+      final var faceRotation = face.getRotation();
 
-      final var offsetL4 =
-          new Translation2d(kBumperDimensions / 2 + gapL4, branchShift * (i % 2 == 0 ? -1 : 1))
-              .rotateBy(face.getRotation());
+      final var offsetL2 = getScoringOffset(faceRotation, i, gapL2);
+      final var offsetL3 = getScoringOffset(faceRotation, i, gapL3);
+      final var offsetL4 = getScoringOffset(faceRotation, i, gapL4);
 
-      final var rotation = face.getRotation().rotateBy(rotation180);
+      final var rotation = faceRotation.rotateBy(rotation180);
 
-      reefScoringPoses[i] = new Pose2d(face.getTranslation().plus(offset), rotation);
+      reefScoringPosesL2[i] = new Pose2d(face.getTranslation().plus(offsetL2), rotation);
+      reefScoringPosesL3[i] = new Pose2d(face.getTranslation().plus(offsetL3), rotation);
       reefScoringPosesL4[i] = new Pose2d(face.getTranslation().plus(offsetL4), rotation);
 
       // System.out.println(
@@ -62,6 +74,12 @@ public final class GameConstants {
   public static boolean isAtClimbPosition(Pose2d pose) {
     final var x = FieldConstants.fieldPose.apply(pose).getX();
     return MathUtil.isNear(kClimbPositionX, x, Units.inchesToMeters(1));
+  }
+
+  /** Determines if the pose is at the desired net scoring position. */
+  public static boolean isAtNetScoringPosition(Pose2d pose) {
+    final var x = FieldConstants.fieldPose.apply(pose).getX();
+    return MathUtil.isNear(kNetScoringPositionX, x, Units.inchesToMeters(1));
   }
 
   /** Determines if the pose is within safe field perimeter to be used for auto. */
@@ -91,5 +109,27 @@ public final class GameConstants {
     }
 
     return false;
+  }
+
+  /** Field quadrant. Left or right based on the alliance perspective. */
+  public enum FieldQuadrant {
+    BlueLeft,
+    BlueRight,
+    RedLeft,
+    RedRight,
+  }
+
+  /** Returns the field quadrant of the pose. */
+  public static FieldQuadrant getQuadrant(Pose2d pose) {
+    final var y = pose.getY();
+    if (pose.getX() < FieldConstants.kFieldHalfLength.in(Meters)) {
+      return y < FieldConstants.kFieldHalfWidth.in(Meters)
+          ? FieldQuadrant.BlueRight
+          : FieldQuadrant.BlueLeft;
+    } else {
+      return y < FieldConstants.kFieldHalfWidth.in(Meters)
+          ? FieldQuadrant.RedLeft
+          : FieldQuadrant.RedRight;
+    }
   }
 }

@@ -86,8 +86,8 @@ public class RobotState {
   private long coralPoseTimestamp = -1;
 
   private Pose2d visionPose = Pose2d.kZero;
-  private Pose2d coralPose = Pose2d.kZero;
 
+  private Optional<Pose2d> coralPose = Optional.empty();
   private Optional<Pose2d> targetPose = Optional.empty();
   private Optional<Pose2d> scoringPose = Optional.empty();
   private int scoringTarget = -1;
@@ -246,10 +246,10 @@ public class RobotState {
         : -1;
   }
 
-  /** Detected coral pose */
+  /** Detected coral pose (debugging only) */
   @Logged(name = "CoralPose", importance = Importance.INFO)
-  public Pose2d getCoralPose() {
-    return coralPose;
+  public Pose2d getCoralPoseDebug() {
+    return coralPose.isPresent() ? coralPose.get() : Pose2d.kZero;
   }
 
   /** Age (milliseconds) of the most recent coral pose */
@@ -499,6 +499,11 @@ public class RobotState {
     return scoringPose;
   }
 
+  /** Gets detected coral pose. */
+  public Optional<Pose2d> getCoralPose() {
+    return coralPose;
+  }
+
   /** Determines whether robot is at the scoring pose. */
   public boolean isAtScoringPose() {
     return scoringPose.isPresent() && drivetrain.isAtPose(scoringPose.get());
@@ -665,12 +670,18 @@ public class RobotState {
         final var vectorToCoral = detectedObject.value();
 
         // determine pose of the coral based on the robot pose and heading
-        final var robotPose = getRobotPose();
-        coralPoseTimestamp = newDetectedObjectTimestamp;
-        coralPose =
-            new Pose2d(
-                robotPose.getTranslation().plus(vectorToCoral.rotateBy(robotPose.getRotation())),
-                Rotation2d.kZero);
+        final var maybeRobotPoseAtDetection = getOdometryPoseAt(newDetectedObjectTimestamp);
+        if (maybeRobotPoseAtDetection.isPresent()) {
+          final var robotPoseAtDetection = maybeRobotPoseAtDetection.get();
+          coralPoseTimestamp = newDetectedObjectTimestamp;
+          coralPose =
+              Optional.of(
+                  new Pose2d(
+                      robotPoseAtDetection
+                          .getTranslation()
+                          .plus(vectorToCoral.rotateBy(robotPoseAtDetection.getRotation())),
+                      Rotation2d.kZero));
+        }
       }
     }
 
@@ -728,7 +739,11 @@ public class RobotState {
   private Optional<Pair<Pose2d, Integer>> getClosestScoringPose(
       Pose2d robotPose, int scoringLevel) {
     final var scoringPoses =
-        scoringLevel == 4 ? GameConstants.reefScoringPosesL4 : GameConstants.reefScoringPoses;
+        scoringLevel == 4
+            ? GameConstants.reefScoringPosesL4
+            : scoringLevel == 3
+                ? GameConstants.reefScoringPosesL3
+                : GameConstants.reefScoringPosesL2;
 
     final var robotXY = robotPose.getTranslation();
 

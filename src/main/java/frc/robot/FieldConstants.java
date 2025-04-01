@@ -27,6 +27,12 @@ public final class FieldConstants {
   /** Center of the starting line */
   public static final Distance kStartingLineX = Inches.of(298.5);
 
+  /** Field half length (X) */
+  public static final Distance kFieldHalfLength = kFieldLength.div(2);
+
+  /** Field half width (Y) */
+  public static final Distance kFieldHalfWidth = kFieldWidth.div(2);
+
   public static final class Reef {
     public static final Translation2d center =
         new Translation2d(Units.inchesToMeters(176.75), kFieldWidth.in(Meters) / 2.0);

@@ -11,6 +11,7 @@ import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.ctre.phoenix6.swerve.SwerveRequest.ForwardPerspectiveValue;
 import com.pathplanner.lib.commands.FollowPathCommand;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.path.PathPlannerPath;
@@ -93,6 +94,20 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
       new SwerveRequest.FieldCentricFacingAngle()
           .withDeadband(maxSpeedMetersPerSecond * kControllerDeadband)
           .withRotationalDeadband(maxAngularRateRadiansPerSecond * kControllerDeadband)
+          .withDriveRequestType(DriveRequestType.Velocity)
+          .withHeadingPID(
+              DriveConstants.PathFollowing.rotationKp,
+              DriveConstants.PathFollowing.rotationKi,
+              DriveConstants.PathFollowing.rotationKd);
+
+  // swerve request for auto driving
+  private final SwerveRequest.RobotCentric driveRobot =
+      new SwerveRequest.RobotCentric().withDriveRequestType(DriveRequestType.Velocity);
+
+  // swerve request for auto driving with orientation lock
+  private final SwerveRequest.RobotCentricFacingAngle driveRobotFacingAngle =
+      new SwerveRequest.RobotCentricFacingAngle()
+          .withForwardPerspective(ForwardPerspectiveValue.BlueAlliance)
           .withDriveRequestType(DriveRequestType.Velocity)
           .withHeadingPID(
               DriveConstants.PathFollowing.rotationKp,
@@ -415,7 +430,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           final var heading = Math.atan2(vx, vy);
           final var v = MathUtil.clamp(teleopVelocityLimiter.calculate(Math.hypot(vx, vy)), -1, 1);
 
-          driveAt(
+          driveAtFieldRelative(
               v * Math.sin(heading) * maxSpeedMetersPerSecond,
               v * Math.cos(heading) * maxSpeedMetersPerSecond,
               MathUtil.clamp(Math.signum(w) * teleopRotationLimiter.calculate(Math.abs(w)), -1, 1)
@@ -456,7 +471,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
           path,
           this::getPose,
           this::getRobotSpeeds,
-          this::driveAt,
+          this::driveAtRobotRelative,
           new PPHolonomicDriveController(
               DriveConstants.PathFollowing.kTranslationPID,
               DriveConstants.PathFollowing.kRotationPID),
@@ -500,7 +515,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    * @param speeds robot-centric chassis speeds
    * @param ff PP drive feedforwards
    */
-  public void driveAt(ChassisSpeeds speeds, DriveFeedforwards ff) {
+  public void driveAtRobotRelative(ChassisSpeeds speeds, DriveFeedforwards ff) {
     setControl(
         pathApplyRobotSpeeds
             .withSpeeds(speeds)
@@ -513,16 +528,16 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
    *
    * @param speeds robot-centric chassis speeds
    */
-  public void driveAt(ChassisSpeeds speeds) {
+  public void driveAtRobotRelative(ChassisSpeeds speeds) {
     setControl(pathApplyRobotSpeeds.withSpeeds(speeds));
   }
 
   /**
-   * Drives with the specified input velocities and omega. Honors orientation lock.
+   * Drives with the specified field-relative input velocities and omega. Honors orientation lock.
    *
    * <p>Use this version for teleop control.
    */
-  public void driveAt(double vx, double vy, double omega) {
+  public void driveAtFieldRelative(double vx, double vy, double omega) {
     final var request =
         orientationLock.isPresent()
             ? driveFacingAngle
@@ -534,9 +549,27 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     setControl(request);
   }
 
+  /**
+   * Drives with the specified robot-relative input velocities and omega. Honors orientation lock.
+   * Uses field-perspective aka blue alliance origin.
+   *
+   * <p>Use this version for autonomous control.
+   */
+  public void driveAtRobotRelative(double vx, double vy, double omega) {
+    final var request =
+        orientationLock.isPresent()
+            ? driveRobotFacingAngle
+                .withVelocityX(vx)
+                .withVelocityY(vy)
+                .withTargetDirection(orientationLock.get())
+            : driveRobot.withVelocityX(vx).withVelocityY(vy).withRotationalRate(omega);
+
+    setControl(request);
+  }
+
   /** Stops the robot by setting speeds to zero. */
   public void stop() {
-    driveAt(kZeroSpeeds);
+    driveAtRobotRelative(kZeroSpeeds);
   }
 
   /** Determines whether robot is at the specified pose. */

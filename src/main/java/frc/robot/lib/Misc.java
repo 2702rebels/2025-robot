@@ -48,6 +48,16 @@ public final class Misc {
     return angleRadians;
   }
 
+  /** Determines if the angle in radians is in the specified sector. */
+  public static boolean betweenAngle(double angle, double startAngle, double endAngle) {
+    final var v = clampAngle(angle);
+
+    // CCW arcs
+    return startAngle > endAngle
+        ? v >= startAngle || v <= endAngle
+        : v >= startAngle && v <= endAngle;
+  }
+
   /**
    * Returns angle in radians representing the shortest arc between two inputs. The sign of returned
    * value indicates the direction of the rotation: positive is CCW, negative is CW. For example:

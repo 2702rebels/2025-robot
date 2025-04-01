@@ -46,12 +46,14 @@ public class Elevator extends SubsystemBase {
   private static final double kStatorCurrentLimit = 60;
   private static final double kStallSpeed = 100; // RPMs
 
+  private double extraFF = 0;
+
   // conversion factor between rotation and linear movement
   // 3" wheel diameter, 8:1 reduction ratio
   private static final double conversionFactor = Math.PI * 3 / 8;
 
   // maximum safe travel
-  private static final double maxTravel = 67;
+  private static final double maxTravel = 67.5;
 
   // tolerance (inches)
   private static final double tolerance = 0.5;
@@ -137,11 +139,15 @@ public class Elevator extends SubsystemBase {
 
     final var gravityFF = getPosition() < 16 ? kG0.get() : kG1.get(); // kG0 below 16"
     motorLeader.setControl(
-        request.withPosition(setpoint / conversionFactor).withFeedForward(gravityFF));
+        request.withPosition(setpoint / conversionFactor).withFeedForward(gravityFF + extraFF));
   }
 
   public void reset() {
     motorLeader.setPosition(0);
+  }
+
+  public void setExtraFF(double value) {
+    extraFF = value;
   }
 
   public void setPosition(double valueInches) {

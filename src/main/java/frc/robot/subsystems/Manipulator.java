@@ -6,6 +6,7 @@ import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLimitSwitch;
 import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.epilogue.Logged.Importance;
 import edu.wpi.first.math.MathUtil;
@@ -15,6 +16,7 @@ import edu.wpi.first.wpilibj2.command.FunctionalCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.lib.LoggedSparkMax;
+import frc.robot.lib.RevUtil;
 import frc.robot.lib.Tunable;
 
 /**
@@ -30,14 +32,15 @@ public final class Manipulator extends SubsystemBase {
   private static final double __kCoralStallSpeedUB = 800; // RPMs
   private static final double __kCoralStallSpeedLB = 400; // RPMs
 
-  private static final double __kAlgaeIntakeVelocity = 0.8;
-  private static final double __kAlgaeEjectVelocity = 0.9;
-  private static final double __kAlgaeHoldVelocity = 0.8;
+  private static final double __kAlgaeIntakeVelocity = 1.0;
+  private static final double __kAlgaeEjectVelocity = 1.0;
+  private static final double __kAlgaeHoldVelocity = 1.0;
 
   private static final double __kCoralP = 3.5;
   private static final double __kCoralReindexPosition = 0.15;
 
-  private static final int kGuideMotorStallCurrent = 30;
+  private static final int __kGuideMotorStallCurrentAlgae = 15;
+  private static final int __kGuideMotorStallCurrentCoral = 30;
 
   private static final double kGuideGearRatio = 7;
   private static final double kCoralGearRatio = 7;
@@ -73,7 +76,7 @@ public final class Manipulator extends SubsystemBase {
   /** Detects algae presence by checking for stall on the guide motor. */
   public boolean hasAlgae() {
     return !intakingCoral
-        && motorGuide.getCurrentAmps() > kGuideMotorStallCurrent * 0.8
+        && motorGuide.getCurrentAmps() > kGuideMotorStallCurrentAlgae.get() * 0.8
         && MathUtil.isNear(0, motorGuide.getVelocityRPM(), 100);
   }
 
@@ -89,7 +92,7 @@ public final class Manipulator extends SubsystemBase {
             guideCanID,
             (config) -> {
               config
-                  .smartCurrentLimit(kGuideMotorStallCurrent)
+                  .smartCurrentLimit(__kGuideMotorStallCurrentCoral)
                   .voltageCompensation(12)
                   .idleMode(IdleMode.kCoast)
                   .signals
@@ -175,6 +178,13 @@ public final class Manipulator extends SubsystemBase {
     }
   }
 
+  /** Updates smart current limit on the guide motor. */
+  private void setGuideStallCurrent(double value) {
+    final var newConfig = new SparkMaxConfig();
+    newConfig.smartCurrentLimit((int) value);
+    RevUtil.configEphemeral(motorGuide, newConfig);
+  }
+
   /**
    * Gets the coral presence sensor.
    *
@@ -195,6 +205,7 @@ public final class Manipulator extends SubsystemBase {
               intakingCoral = true;
               stallDetectionActive = false;
               motorGuideSpeed = -kCoralIntakeVelocityGuide.get();
+              setGuideStallCurrent(kGuideMotorStallCurrentCoral.get());
             },
             () -> {},
             interrupted -> stopMotors(),
@@ -228,6 +239,7 @@ public final class Manipulator extends SubsystemBase {
             () -> {
               motorCoral.stopMotor();
               motorGuide.set(kAlgaeIntakeVelocity.get());
+              setGuideStallCurrent(kGuideMotorStallCurrentAlgae.get());
             },
             this::stopMotors)
         .withName("IntakeAlgae");
@@ -249,6 +261,7 @@ public final class Manipulator extends SubsystemBase {
             () -> {
               motorCoral.stopMotor();
               motorGuide.set(kAlgaeHoldVelocity.get());
+              setGuideStallCurrent(kGuideMotorStallCurrentAlgae.get());
             },
             this::stopMotors)
         .withName("HoldAlgae");
@@ -283,5 +296,8 @@ public final class Manipulator extends SubsystemBase {
   private static Tunable.DoubleValue kAlgaeHoldVelocity = Tunable.value("Manipulator/Algae/HoldVelocity", __kAlgaeHoldVelocity);
 
   private static Tunable.DoubleValue kCoralReindexPosition = Tunable.value("Manipulator/Coral/ReindexPosition", __kCoralReindexPosition);
+
+  private static Tunable.DoubleValue kGuideMotorStallCurrentAlgae = Tunable.value("Manipulator/Algae/StallCurrent", __kGuideMotorStallCurrentAlgae);
+  private static Tunable.DoubleValue kGuideMotorStallCurrentCoral = Tunable.value("Manipulator/Coral/StallCurrent", __kGuideMotorStallCurrentCoral);
   // spotless:on
 }
