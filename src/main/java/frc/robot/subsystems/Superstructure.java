@@ -103,6 +103,11 @@ public final class Superstructure extends SubsystemBase {
   // to the auto scoring position
   private boolean delayed;
 
+  // allows disabling intake (manipulator) without lifting the pivot;
+  // used during autonomous when failed to intake the coral but lifting
+  // pivot may lead to dangerous consequences, e.g. jamming algae
+  private boolean intakeDisabled;
+
   public Superstructure(Elevator elevator, Pivot pivot, Manipulator manipulator) {
     this.elevator = elevator;
     this.pivot = pivot;
@@ -225,6 +230,10 @@ public final class Superstructure extends SubsystemBase {
   @Logged(name = "IsElevatorStalled", importance = Importance.INFO)
   public final Trigger isElevatorStalled;
 
+  /** Trigger for disabled intake (manipulator). */
+  @Logged(name = "ShouldDisableIntake", importance = Importance.INFO)
+  public final Trigger shouldDisableIntake = new Trigger(() -> intakeDisabled);
+
   /** Trigger for delayed deployment. */
   @Logged(name = "IsDelayed", importance = Importance.INFO)
   public final Trigger isDelayed = new Trigger(() -> delayed);
@@ -297,6 +306,16 @@ public final class Superstructure extends SubsystemBase {
   /** Sets delayed flag on the superstructure to prevent deployment during auto driving. */
   public void setDelayed(boolean value) {
     delayed = value;
+  }
+
+  /** Disables intake (manipulator). */
+  public void disableIntake() {
+    intakeDisabled = true;
+  }
+
+  /** Enables intake (manipulator). */
+  public void enableIntake() {
+    intakeDisabled = false;
   }
 
   /** Returns effective transition angle that depends on type of game piece being controlled. */

@@ -185,7 +185,7 @@ public class RobotContainer {
     state.setDetectedObjectSupplier(objectDetector::getDetectedObject);
 
     autoFactory = drivetrain.createAutoFactory();
-    autoRoutines = new AutoRoutines(autoFactory, drivetrain, superstructure, manipulator);
+    autoRoutines = new AutoRoutines(autoFactory, drivetrain, superstructure);
 
     autoChooser.addRoutine(
         "DriveForward", () -> autoRoutines.naive("Drive forward", driveForward(Inches.of(24))));
@@ -354,7 +354,7 @@ public class RobotContainer {
         .shouldIntakeCoralFloor
         .and(superstructure.hasCoral.negate())
         .and(superstructure.canFloorIntake)
-        .whileTrue(manipulator.intakeCoral());
+        .whileTrue(manipulator.intakeCoral().unless(this::isIntakeDisabled));
 
     // reindex coral after acquisition
     state.shouldIntakeCoral.and(superstructure.hasCoral).onTrue(manipulator.reindexCoral());
@@ -849,6 +849,19 @@ public class RobotContainer {
   public Command getAutonomousCommand() {
     // run the routine selected from the auto chooser
     return autoChooser.selectedCommand();
+  }
+
+  /** Returns intake disabled state (autonomous moe only). */
+  private boolean isIntakeDisabled() {
+    return DriverStation.isAutonomousEnabled() && superstructure.shouldDisableIntake.getAsBoolean();
+  }
+
+  public void disableIntake() {
+    superstructure.disableIntake();
+  }
+
+  public void enableIntake() {
+    superstructure.enableIntake();
   }
 
   /** Runs validation checklist at the startup. Must be invoked from the robotInit(). */

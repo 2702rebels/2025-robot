@@ -11,7 +11,6 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.RobotState.Intent;
 import frc.robot.commands.DriveToPose;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
-import frc.robot.subsystems.Manipulator;
 import frc.robot.subsystems.Superstructure;
 import java.util.Optional;
 
@@ -20,17 +19,12 @@ public class AutoRoutines {
   private final RobotState state;
   private final CommandSwerveDrivetrain drivetrain;
   private final Superstructure superstructure;
-  private final Manipulator manipulator;
 
   public AutoRoutines(
-      AutoFactory factory,
-      CommandSwerveDrivetrain drivetrain,
-      Superstructure superstructure,
-      Manipulator manipulator) {
+      AutoFactory factory, CommandSwerveDrivetrain drivetrain, Superstructure superstructure) {
     this.factory = factory;
     this.drivetrain = drivetrain;
     this.superstructure = superstructure;
-    this.manipulator = manipulator;
     this.state = RobotState.getInstance();
   }
 
@@ -109,7 +103,9 @@ public class AutoRoutines {
         .onTrue(
             intake.andThen(
                 Commands.either(
-                    scoreTarget2, manipulator.stop().asProxy(), superstructure.hasCoral)));
+                    scoreTarget2,
+                    Commands.runOnce(superstructure::disableIntake),
+                    superstructure.hasCoral)));
 
     return routine;
   }

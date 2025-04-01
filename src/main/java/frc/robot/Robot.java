@@ -139,6 +139,7 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopInit() {
     RobotState.getInstance().enterTeleop();
+    robotContainer.enableIntake();
 
     if (autonomousCommand != null) {
       autonomousCommand.cancel();
