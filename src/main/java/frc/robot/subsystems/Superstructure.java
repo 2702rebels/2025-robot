@@ -79,7 +79,7 @@ public final class Superstructure extends SubsystemBase {
 
   // debounce algae presence to distinguish between initial
   // amp surge and stall situations
-  private static final double kAlgaeIntakeDelaySeconds = 0.5;
+  private static final double kAlgaeIntakeDelaySeconds = 0.25;
 
   // height when the pivot can reach beyond critical angle and elevator can move
   private static final double kElevatorCriticalHeight = 60;

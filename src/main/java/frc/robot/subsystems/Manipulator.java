@@ -76,8 +76,8 @@ public final class Manipulator extends SubsystemBase {
   /** Detects algae presence by checking for stall on the guide motor. */
   public boolean hasAlgae() {
     return !intakingCoral
-        && motorGuide.getCurrentAmps() > kGuideMotorStallCurrentAlgae.get() * 0.8
-        && MathUtil.isNear(0, motorGuide.getVelocityRPM(), 100);
+        && motorGuide.getCurrentAmps() > kGuideMotorStallCurrentAlgae.get() * 0.5
+        && MathUtil.isNear(0, motorGuide.getVelocityRPM(), 50);
   }
 
   @Logged(name = "Guide", importance = Importance.INFO)
@@ -237,6 +237,7 @@ public final class Manipulator extends SubsystemBase {
   public Command intakeAlgae() {
     return runEnd(
             () -> {
+              intakingCoral = false;
               motorCoral.stopMotor();
               motorGuide.set(kAlgaeIntakeVelocity.get());
               setGuideStallCurrent(kGuideMotorStallCurrentAlgae.get());
@@ -259,6 +260,7 @@ public final class Manipulator extends SubsystemBase {
   public Command holdAlgae() {
     return runEnd(
             () -> {
+              intakingCoral = false;
               motorCoral.stopMotor();
               motorGuide.set(kAlgaeHoldVelocity.get());
               setGuideStallCurrent(kGuideMotorStallCurrentAlgae.get());
