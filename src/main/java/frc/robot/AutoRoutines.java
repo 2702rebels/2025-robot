@@ -40,8 +40,8 @@ public class AutoRoutines {
   }
 
   private static final double kFieldWidth = FieldConstants.kFieldWidth.in(Meters);
-  private static final double kStartIntakeY = 5.7; // meters
-  private static final double kStopIntakeY = 5.8; // meters
+  private static final double kStartIntakeY = 5.65; // meters
+  private static final double kStopIntakeY = 5.75; // meters
 
   // spotless:off
   private static final Pose2d startIntakeLeft = new Pose2d(4, kStartIntakeY, Rotation2d.fromDegrees(-180));
