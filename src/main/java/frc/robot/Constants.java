@@ -141,7 +141,7 @@ public final class Constants {
       public static final double kTranslationTolerance = Units.inchesToMeters(1);
 
       /** Rotation tolerance */
-      public static final double kRotationTolerance = Units.degreesToRadians(2);
+      public static final double kRotationTolerance = Units.degreesToRadians(3);
     }
 
     /** PID configuration for path following controllers */
