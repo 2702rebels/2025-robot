@@ -28,6 +28,7 @@ public final class Manipulator extends SubsystemBase {
   private static final double __kCoralIntakeVelocity = 0.85;
   private static final double __kCoralIntakeVelocityGuide = 1;
   private static final double __kCoralEjectVelocity = 0.4;
+  private static final double __kCoralSlowEjectVelocity = 0.2;
   private static final double __kCoralReverseTime = 0.06;
   private static final double __kCoralStallSpeedUB = 800; // RPMs
   private static final double __kCoralStallSpeedLB = 400; // RPMs
@@ -224,6 +225,16 @@ public final class Manipulator extends SubsystemBase {
         .withName("EjectCoral");
   }
 
+  public Command ejectCoralSlow() {
+    return runEnd(
+            () -> {
+              motorCoral.set(kCoralSlowEjectVelocity.get());
+              motorGuide.stopMotor();
+            },
+            this::stopMotors)
+        .withName("EjectCoralSlow");
+  }
+
   public Command ejectCoralReverse() {
     return runEnd(
             () -> {
@@ -289,6 +300,7 @@ public final class Manipulator extends SubsystemBase {
   private static Tunable.DoubleValue kCoralIntakeVelocity = Tunable.value("Manipulator/Coral/IntakeVelocity", __kCoralIntakeVelocity);
   private static Tunable.DoubleValue kCoralIntakeVelocityGuide = Tunable.value("Manipulator/Coral/IntakeVelocityGuide", __kCoralIntakeVelocityGuide);
   private static Tunable.DoubleValue kCoralEjectVelocity = Tunable.value("Manipulator/Coral/EjectVelocity", __kCoralEjectVelocity);
+  private static Tunable.DoubleValue kCoralSlowEjectVelocity = Tunable.value("Manipulator/Coral/SlowEjectVelocity", __kCoralSlowEjectVelocity);
   private static Tunable.DoubleValue kCoralStallSpeedUB = Tunable.value("Manipulator/Coral/StallSpeedUB", __kCoralStallSpeedUB);
   private static Tunable.DoubleValue kCoralStallSpeedLB = Tunable.value("Manipulator/Coral/StallSpeedLB", __kCoralStallSpeedLB);
   private static Tunable.DoubleValue kCoralReverseTime = Tunable.value("Manipulator/Coral/ReverseTime", __kCoralReverseTime);

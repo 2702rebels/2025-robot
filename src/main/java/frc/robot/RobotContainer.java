@@ -382,7 +382,7 @@ public class RobotContainer {
         .and(superstructure.hasCoral)
         .and(superstructure.canScoreL1)
         .and(scoreManualButton.debounce(0.5, DebounceType.kFalling))
-        .whileTrue(manipulator.ejectCoral());
+        .whileTrue(manipulator.ejectCoralSlow());
 
     // score coral via auto target
     state.isAuto.and(state.hasScoringPose).onTrue(driveAutoScore().until(hasDriverInput));
