@@ -40,7 +40,7 @@ public final class Manipulator extends SubsystemBase {
   private static final double __kCoralP = 3.5;
   private static final double __kCoralReindexPosition = 0.15;
 
-  private static final int __kGuideMotorStallCurrentAlgae = 15;
+  private static final int __kGuideMotorStallCurrentAlgae = 20;
   private static final int __kGuideMotorStallCurrentCoral = 30;
 
   private static final double kGuideGearRatio = 7;
