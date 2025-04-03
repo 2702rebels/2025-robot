@@ -67,6 +67,14 @@ public class AutoRoutines {
     return scoreL4xy('F', 'C', startIntakeRight, stopIntakeRight, startScoreRight);
   }
 
+  public AutoRoutine scoreL4JL() {
+    return scoreL4xy('J', 'L', startIntakeLeft, stopIntakeLeft, startScoreLeft);
+  }
+
+  public AutoRoutine scoreL4EC() {
+    return scoreL4xy('E', 'C', startIntakeRight, stopIntakeRight, startScoreRight);
+  }
+
   private AutoRoutine scoreL4xy(
       char target1, char target2, Pose2d startIntake, Pose2d stopIntake, Pose2d startScore2) {
     final AutoRoutine routine = factory.newRoutine("Score L4 (" + target1 + "," + target2 + ")");

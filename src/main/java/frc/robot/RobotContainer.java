@@ -199,6 +199,8 @@ public class RobotContainer {
 
     autoChooser.addRoutine("Score L4 (I,L) Left Side", autoRoutines::scoreL4IL);
     autoChooser.addRoutine("Score L4 (F,C) Right Side", autoRoutines::scoreL4FC);
+    autoChooser.addRoutine("Score L4 (J,L) Left Side", autoRoutines::scoreL4JL);
+    autoChooser.addRoutine("Score L4 (E,C) Right Side", autoRoutines::scoreL4EC);
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
 
