@@ -40,14 +40,16 @@ public class AutoRoutines {
   }
 
   private static final double kFieldWidth = FieldConstants.kFieldWidth.in(Meters);
+  private static final double kStartIntakeY = 5.7; // meters
+  private static final double kStopIntakeY = 5.8; // meters
 
   // spotless:off
-  private static final Pose2d startIntakeLeft = new Pose2d(4, 5.9, Rotation2d.fromDegrees(-180));
-  private static final Pose2d stopIntakeLeft = new Pose2d(0.85, 5.9, Rotation2d.fromDegrees(-180));
+  private static final Pose2d startIntakeLeft = new Pose2d(4, kStartIntakeY, Rotation2d.fromDegrees(-180));
+  private static final Pose2d stopIntakeLeft = new Pose2d(0.85, kStopIntakeY, Rotation2d.fromDegrees(-180));
   private static final Pose2d startScoreLeft = new Pose2d(2.5, 6.3, Rotation2d.fromDegrees(310));
 
-  private static final Pose2d startIntakeRight = new Pose2d(4, kFieldWidth - 5.9, Rotation2d.fromDegrees(-180));
-  private static final Pose2d stopIntakeRight = new Pose2d(0.85, kFieldWidth - 5.9, Rotation2d.fromDegrees(-180));
+  private static final Pose2d startIntakeRight = new Pose2d(4, kFieldWidth - kStartIntakeY, Rotation2d.fromDegrees(-180));
+  private static final Pose2d stopIntakeRight = new Pose2d(0.85, kFieldWidth - kStopIntakeY, Rotation2d.fromDegrees(-180));
   private static final Pose2d startScoreRight = new Pose2d(2.5, kFieldWidth - 6.3, Rotation2d.fromDegrees(50));
   // spotless:on
 
